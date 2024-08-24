@@ -1,0 +1,24 @@
+/*
+ * data.h
+ *
+ *  Created on: Aug 23, 2024
+ *      Author: Abhineet
+ */
+
+#ifndef INC_DATA_H_
+#define INC_DATA_H_
+
+#define N_OF_SUBPACK (8u) // number of subpacks
+
+#define IC_PER_SUBPACK (1u) // 6830 per subpack
+#define CELLS_PER_LTC 15u   // number of cells per LTC
+#define CELL_TEMPS_PER_LTC 15u
+
+#define CELL_TEMPS_PER_PACK (CELL_TEMPS_PER_LTC * IC_PER_SUBPACK)
+
+#define N_OF_ADBMS (IC_PER_SUBPACK * N_OF_SUBPACK)          // total number of ADBMS6830s
+#define N_OF_CELL (N_OF_LTC * CELLS_PER_LTC)                // total number of cells
+#define CELLS_PER_SUBPACK (N_OF_CELL / N_OF_SUBPACK)        // cells per subpack
+#define N_OF_TEMP_CELL (CELL_TEMPS_PER_PACK * N_OF_SUBPACK) // total number of temps
+
+#endif /* INC_DATA_H_ */
