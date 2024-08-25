@@ -62,20 +62,26 @@ uint16_t pec15_calc(uint8_t len, uint8_t* data) {
 
  @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
  @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
- @param[in] uint8_t len length of the data array being written on the SPI port
- @param[in] uint8_t data[] the data array to be written on the SPI port
+ @param[in] uint8_t cmd[4] the command array to be written on the SPI port (4 bytes)
+ @param[in] uint8_t** data the 2D array storing the data arrays to be written on the SPI port
 
 */
 void spi_write(SPI_HandleTypeDef* hspi_ptr, // Pointer to the SPI handle
 			   TIM_HandleTypeDef* htim_ptr, // Pointer to a timer handle
-			   uint8_t data[],              // Array of bytes to be written on the SPI port
-			   uint8_t len                  // Option: Number of bytes to be written on the SPI port
+			   uint8_t cmd[4],              // Array of command bytes to be written on the SPI port
+			   uint8_t** data               // 2D array storing data bytes for each IC (can be set to NULL if not a write command)
 			   )
 {
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
 	delay_500_ns(htim_ptr);
 
-	HAL_SPI_Transmit(hspi_ptr, data, len, 100);
+	HAL_SPI_Transmit(hspi_ptr, cmd, 4, 100);
+
+	if (data != NULL) {
+		for (uint8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) { // Data written to last IC in the chain first and first IC in the chain last (see bus protocols in datasheet)
+			HAL_SPI_Transmit(hspi_ptr, data[ic], 8, 100); // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
+		}
+	}
 	delay_500_ns(htim_ptr);
 
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
@@ -88,25 +94,23 @@ void spi_write(SPI_HandleTypeDef* hspi_ptr, // Pointer to the SPI handle
 
 @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
 @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
-@param[in] uint8_t tx_data[] array of data to be written on the SPI port
-@param[in] uint8_t tx_len length of the tx_data array
-@param[out] uint8_t rx_data array that read data will be written too.
-@param[in] uint8_t rx_len number of bytes to be read from the SPI port.
+@param[in] uint8_t cmd[4] the command array to be written on the SPI port (4 bytes)
+@param[out] uint8_t rx_data[N_OF_ADBMS][8] 2D array that read data will be written to (8 bytes per IC)
 
 */
-void spi_write_read(SPI_HandleTypeDef* hspi_ptr, // pointer to the SPI handle
-					TIM_HandleTypeDef* htim_ptr, // pointer to a timer handle
-					uint8_t tx_data[], // array of data to be written on SPI port
-					uint8_t tx_len, // length of the tx data array
-					uint8_t *rx_data, // Input: array that will store the data read by the SPI port
-					uint8_t rx_len // Option: number of bytes to be read from the SPI port
+void spi_write_read(SPI_HandleTypeDef* hspi_ptr,    // Pointer to the SPI handle
+					TIM_HandleTypeDef* htim_ptr,    // Pointer to a timer handle
+					uint8_t cmd[4],                 // Array of command bytes to be written on SPI port
+					uint8_t rx_data[N_OF_ADBMS][8]  // Input: 2D array that will store the data read by the SPI port
 					)
 {
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
 	delay_500_ns(htim_ptr);
 
-	HAL_SPI_Transmit(hspi_ptr, tx_data, tx_len, 100);
-	HAL_SPI_Receive(hspi_ptr, rx_data, rx_len, 100);
+	HAL_SPI_Transmit(hspi_ptr, cmd, 4, 100);
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) { // Data read from first IC in the chain first and last IC in the chain last (see bus protocols in datasheet)
+		HAL_SPI_Receive(hspi_ptr, rx_data[ic], 8, 100); // 6 register bytes + 2 PEC bytes = 8 bytes per IC
+	}
 	delay_500_ns(htim_ptr);
 
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
