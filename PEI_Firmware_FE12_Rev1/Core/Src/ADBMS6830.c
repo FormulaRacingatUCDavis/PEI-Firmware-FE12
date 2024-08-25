@@ -11,24 +11,45 @@
 #include "main.h"
 
 /*!**********************************************************
+ \brief Calculates and returns the CRC10
+
+
+@param[in]  uint8_t len: the length of the data array being passed to the function
+
+@param[in]  uint8_t data[]: the array of data that the PEC will be generated from
+
+
+@return  The calculated pec10 as an unsigned int16_t
+***********************************************************/
+uint16_t pec10_calc(uint8_t len, uint8_t* data) {
+	uint16_t remainder;
+	uint8_t addr;
+
+	remainder = 16; // initialize the PEC
+	for (uint8_t i = 0; i < len; i++) { // loops for each byte in data array
+		addr = (uint8_t)(((remainder >> 2) ^ data[i]) & 0xFF); // calculate PEC table address
+		remainder = (remainder << 8) ^ crc10Table[addr];
+	}
+	return remainder;
+}
+
+/*!**********************************************************
  \brief Calculates and returns the CRC15
 
 
 @param[in]  uint8_t len: the length of the data array being passed to the function
 
-@param[in]  uint8_t data[] : the array of data that the PEC will be generated from
+@param[in]  uint8_t data[]: the array of data that the PEC will be generated from
 
 
 @return  The calculated pec15 as an unsigned int16_t
 ***********************************************************/
-uint16_t pec15_calc(uint8_t len, uint8_t *data)
-{
+uint16_t pec15_calc(uint8_t len, uint8_t* data) {
 	uint16_t remainder;
 	uint8_t addr;
 
 	remainder = 16; // initialize the PEC
-	for(uint8_t i = 0; i < len; i++) // loops for each byte in data array
-	{
+	for (uint8_t i = 0; i < len; i++) { // loops for each byte in data array
 		addr = (uint8_t)(((remainder >> 7) ^ data[i]) & 0xFF); // calculate PEC table address
 		remainder = (remainder << 8) ^ crc15Table[addr];
 	}
