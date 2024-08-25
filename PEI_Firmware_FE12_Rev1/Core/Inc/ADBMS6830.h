@@ -151,6 +151,8 @@ void ADBMS6830_adsv(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void ADBMS6830_adax(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
 void ADBMS6830_rdcv(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint16_t* voltages);
-void ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, AuxPin_t pin, uint16_t* temps);
+void ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, AuxPin_t pin, uint16_t* aux);
+void ADBMS6830_rdaux_GPIO(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint16_t* temps);
+void ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint8_t* mismatches);
 
 #endif /* INC_ADBMS6830_H_ */
