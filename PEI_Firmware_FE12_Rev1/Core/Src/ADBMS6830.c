@@ -123,16 +123,24 @@ void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr,
 	uint8_t reg_idx;
 	uint8_t config_val = discharge_enable ? 0b1001 : 0b0000; // Set to 60% duty cycle if enabling discharge
 	cell_num++; // Cell numbering in PWM register group is 1-based
-	if ((cell_num % 2) == 1) config_val <<= 4;
+	if ((cell_num % 2) == 0) config_val <<= 4;
 
 	if (cell_num < 13) {
 		reg_idx = (cell_num - 1) / 2;
-		tx_pwma[ic_num][reg_idx] |= config_val;
+
+		if ((cell_num % 2) == 0) config_val += LO8(tx_wrpwma[ic_num][reg_idx]);
+		else config_val += HI8(tx_wrpwma[ic_num][reg_idx]) << 8;
+		tx_wrpwma[ic_num][reg_idx] = config_val;
+
 		ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 	}
 	else {
 		reg_idx = (cell_num - 13) / 2;
-		tx_pwmb[ic_num][reg_idx] |= config_val;
+
+		if ((cell_num % 2) == 0) config_val += LO8(tx_wrpwmb[ic_num][reg_idx]);
+		else config_val += HI8(tx_wrpwmb[ic_num][reg_idx]) << 8;
+		tx_wrpwmb[ic_num][reg_idx] = config_val;
+
 		ADBMS6830_wrpwmb(hspi_ptr, htim_ptr);
 	}
 }
