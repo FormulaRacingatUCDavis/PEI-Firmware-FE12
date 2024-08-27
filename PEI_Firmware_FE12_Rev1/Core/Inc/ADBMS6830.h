@@ -65,7 +65,7 @@ static const unsigned int crc15Table[256] = {0x0, 0xc599, 0xceab, 0xb32, 0xd8cf,
 0x585a, 0x8ba7, 0x4e3e, 0x450c, 0x8095};
 
 /*
-  |CHG   | Dec  |Channels to convert   |
+  |CH    | Dec  |Channels to convert   |
   |------|------|----------------------|
   |00000 | 0    | Everything           |
   |00001 | 1    | GPIO 1 			   |
@@ -107,18 +107,18 @@ static const unsigned int crc15Table[256] = {0x0, 0xc599, 0xceab, 0xb32, 0xd8cf,
 #define AUX_CH_VRES 22
 #define AUX_CH_RESERVED 23
 
-/*****************************************************
-  Brief controls if discharging is enabled
-  or disabled during Cell conversions.
-
- |DCP | Discharge Permitted During conversion |
- |----|----------------------------------------|
- |0   | No - discharge is not permitted         |
- |1   | Yes - discharge is permitted           |
-
-*******************************************************/
-#define DCP_DISABLED 0
-#define DCP_ENABLED 1
+/*
+  |OW | Dec | Cell Open Wire Detection State |
+  |---|-----|--------------------------------|
+  |00 | 0   | Disabled                       |
+  |01 | 1   | Enabled for even channels      |
+  |10 | 2   | Enabled for odd channels       |
+  |11 | 3   | Enabled for all channels       |
+*/
+#define CELL_OW_DISABLED 0
+#define CELL_OW_CH_EVEN 1
+#define CELL_OW_CH_ODD 2
+#define CELL_OW_CH_ALL 3
 
 typedef enum {
     GPIO1,
@@ -157,13 +157,29 @@ typedef enum {
 #define CFGB4 0x00
 #define CFGB5 0x00
 
+// Default values for PWMA registers
+#define PWMA0 0x00
+#define PWMA1 0x00
+#define PWMA2 0x00
+#define PWMA3 0x00
+#define PWMA4 0x00
+#define PWMA5 0x00
+
+// Default values for PWMB registers (see memory map for reference)
+#define PWMB0 0x00
+#define PWMB1 0x00
+#define PWMB2 0xFF
+#define PWMB3 0xFF
+#define PWMB4 0xFF
+#define PWMB5 0xFF
+
 void ADBMS6830_initialize(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
 void ADBMS6830_set_C_ADC(uint8_t RD, uint8_t CONT, uint8_t DCP, uint8_t RSTF, uint8_t OW);
-void ADBMS6830_set_S_ADC(uint8_t CONT, uint8_t DCP, uint8_t RSTF, uint8_t OW);
+void ADBMS6830_set_S_ADC(uint8_t CONT, uint8_t DCP, uint8_t OW);
 void ADBMS6830_set_Aux_ADC(uint8_t OW, uint8_t PUP, uint8_t CH);
 
-void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint8_t discharge_enable, uint8_t cell_num);
+void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint8_t discharge_enable, uint8_t ic_num, uint8_t cell_num);
 
 void ADBMS6830_wakeup(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void ADBMS6830_wrcfga(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
