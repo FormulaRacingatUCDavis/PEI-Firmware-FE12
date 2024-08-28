@@ -673,4 +673,6 @@ uint8_t ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr,                 
 			}
 		}
 	}
+
+	return 1;
 }
