@@ -199,6 +199,40 @@ void ADBMS6830_adax(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 }
 
 /*
+ \brief Reads back filtered cell voltages from one register group for each IC
+
+ @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
+ @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
+ @param[in] RegGroup_t reg filtered cell voltage register group to read from
+
+ @param[out] uint8_t voltages[N_OF_ADBMS][6] 2D array containing the data read back (6 bytes per register)
+ @param[out] spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
+
+ @returns whether the transaction was successful
+ */
+uint8_t ADBMS6830_rdfc_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
+					   	   TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
+						   RegGroup_t reg,                // Option: filtered cell voltage register group to read from
+						   uint8_t data[N_OF_ADBMS][6],   // Input: 2D array containing the data read back
+						   uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
+					   	   )
+{
+	uint8_t cmd[2];
+	cmd[0] = 0x00;
+	cmd[1] = 0x12 + (uint8_t)reg;
+
+	uint8_t num_tries = 0;
+	uint8_t try_again = 0;
+
+	do {
+		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
+
+		num_tries++;
+		if (num_tries > 2) return 0;
+	} while (try_again);
+}
+
+/*
  \brief Calculates and returns the CRC10 of a given register group
 
  @param[in] uint8_t data[]: the array of data that the PEC will be generated from (6 bytes)
@@ -301,12 +335,12 @@ void spi_write(SPI_HandleTypeDef* hspi_ptr, // Pointer to the SPI handle
 
  @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
  @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
- @param[in] uint8_t cmd[4] the command array to be written on the SPI port (2 bytes)
+ @param[in] uint8_t cmd[2] the command array to be written on the SPI port (2 bytes)
 
  @param[out] uint8_t rx_data[N_OF_ADBMS][6] 2D array that read data will be written to (6 bytes per IC)
  @param[out] uint8_t pec_mismatches Array containing flags indicating which nodes had PEC mismatches
 
- @returns Whether there were any PEC mismatches
+ @returns Whether the transaction occurred without any PEC mismatches
 */
 uint8_t spi_write_read(SPI_HandleTypeDef* hspi_ptr,        // Pointer to the SPI handle
 					   TIM_HandleTypeDef* htim_ptr,        // Pointer to a timer handle
