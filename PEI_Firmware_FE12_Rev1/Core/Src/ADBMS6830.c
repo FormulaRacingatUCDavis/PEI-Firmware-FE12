@@ -20,6 +20,170 @@ uint8_t tx_cfgb[N_OF_ADBMS][6]; // Stores CFGB data to be written to each IC
 uint8_t tx_pwma[N_OF_ADBMS][6]; // Stores PWMA data to be written to each IC
 uint8_t tx_pwmb[N_OF_ADBMS][6]; // Stores PWMB data to be written to each IC
 
+/*
+ \brief Calculates and returns the CRC10 of a given register group
+
+ @param[in] uint8_t data[]: the array of data that the PEC will be generated from (6 bytes)
+
+ @returns The calculated pec10 as an unsigned int16_t
+*/
+uint16_t data_pec_calc(uint8_t data[]) {
+	uint16_t remainder;
+	uint8_t addr;
+
+	remainder = 16; // initialize the PEC
+	for (uint8_t i = 0; i < 6; i++) { // loops for each byte in data array (there are 6 bytes in a register group)
+		addr = (uint8_t)(((remainder >> 2) ^ data[i]) & 0xFF); // calculate PEC table address
+		remainder = (remainder << 8) ^ crc10Table[addr];
+	}
+	return remainder;
+}
+
+/*
+ \brief Calculates and returns the CRC15 of a given command
+
+ @param[in] uint8_t cmd[2]: the command array that the PEC will be generated from (2 bytes)
+
+ @returns The calculated pec15 as an unsigned int16_t
+*/
+uint16_t cmd_pec_calc(uint8_t cmd[2]) {
+	uint16_t remainder;
+	uint8_t addr;
+
+	remainder = 16; // initialize the PEC
+	for (uint8_t i = 0; i < 2; i++) { // loops for each byte in command array
+		addr = (uint8_t)(((remainder >> 7) ^ cmd[i]) & 0xFF); // calculate PEC table address
+		remainder = (remainder << 8) ^ crc15Table[addr];
+	}
+	return remainder * 2; // The CRC15 has a 0 in the LSB so the remainder must be multiplied by 2
+}
+
+
+/*
+ \brief Writes an array of bytes out of the SPI port
+
+ @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
+ @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
+ @param[in] uint8_t cmd[2] the command array to be written on the SPI port (2 bytes)
+ @param[in] uint8_t** data the 2D array storing the data arrays to be written on the SPI port
+*/
+void spi_write(SPI_HandleTypeDef* hspi_ptr, // Pointer to the SPI handle
+			   TIM_HandleTypeDef* htim_ptr, // Pointer to a timer handle
+			   uint8_t cmd[2],              // Array of command bytes to be written on the SPI port
+			   uint8_t** data               // 2D array storing data bytes for each IC (can be set to NULL if not a write command)
+			   )
+{
+	// Data prep (putting everything into a single array + PEC calculations)
+
+	uint8_t tx_len = 4; // 2 command bytes + 2 PEC bytes
+	if (data != NULL) tx_len += N_OF_ADBMS * 8; // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
+	uint8_t tx_data[tx_len];
+	uint16_t cmd_pec;
+
+	tx_data[0] = cmd[0];
+	tx_data[1] = cmd[1];
+
+	cmd_pec = cmd_pec_calc(cmd);
+	tx_data[2] = HI8(cmd_pec);
+	tx_data[3] = LO8(cmd_pec);
+
+	if (data != NULL) {
+		uint8_t idx = 4;
+
+		for (uint8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) { // Data written to last IC in the chain first and first IC in the chain last (see bus protocols in datasheet)
+			uint16_t data_pec;
+
+			for (uint8_t i = 0; i < 6; i++) {
+				tx_data[idx] = data[ic][i];
+				idx++;
+			}
+
+			data_pec = data_pec_calc(data[ic]);
+			tx_data[idx] = HI8(data_pec);
+			tx_data[idx + 1] = LO8(data_pec);
+			idx += 2;
+		}
+	}
+
+	// Data transmission
+
+	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+	delay_500_ns(htim_ptr);
+
+	HAL_SPI_Transmit(hspi_ptr, tx_data, tx_len, 100);
+	delay_500_ns(htim_ptr);
+
+	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+	delay_us(htim_ptr, 2);
+}
+
+
+/*
+ \brief Writes and reads a set number of bytes using the SPI port.
+
+ @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
+ @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
+ @param[in] uint8_t cmd[2] the command array to be written on the SPI port (2 bytes)
+
+ @param[out] uint8_t rx_data[N_OF_ADBMS][6] 2D array that read data will be written to (6 bytes per IC)
+ @param[out] uint8_t pec_mismatches Array containing flags indicating which nodes had PEC mismatches
+
+ @returns Whether the transaction occurred without any PEC mismatches
+*/
+uint8_t spi_write_read(SPI_HandleTypeDef* hspi_ptr,        // Pointer to the SPI handle
+					   TIM_HandleTypeDef* htim_ptr,        // Pointer to a timer handle
+					   uint8_t cmd[2],                     // Array of command bytes to be written on SPI port
+					   uint8_t rx_data[N_OF_ADBMS][6],     // Input: 2D array that will store the data read by the SPI port
+					   uint8_t pec_mismatches[N_OF_ADBMS]  // Input: Array containing flags indicating which nodes had PEC mismatches
+					   )
+{
+	uint8_t rx_len = N_OF_ADBMS * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
+	uint8_t rx_data_flattened[N_OF_ADBMS * 8]; // array to store data from all ICs
+	uint8_t tx_data[4];
+	uint16_t cmd_pec;
+	uint8_t no_errors = 1;
+
+	tx_data[0] = cmd[0];
+	tx_data[1] = cmd[1];
+
+	cmd_pec = cmd_pec_calc(cmd);
+	tx_data[2] = HI8(cmd_pec);
+	tx_data[3] = LO8(cmd_pec);
+
+	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+	delay_500_ns(htim_ptr);
+
+	HAL_SPI_Transmit(hspi_ptr, tx_data, 4, 100);
+	HAL_SPI_Receive(hspi_ptr, rx_data_flattened, rx_len, 100);
+	delay_500_ns(htim_ptr);
+
+	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+	delay_us(htim_ptr, 2);
+
+	// Package data (excluding PEC) into 2D array and process PECs
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) { // Data read from first IC in the chain first and last IC in the chain last (see bus protocols in datasheet)
+		uint16_t data_pec, received_pec;
+
+		for (uint8_t i = 0; i < 6; i++) {
+			rx_data[ic][i] = rx_data_flattened[(ic * 8) + i];
+		}
+
+		data_pec = data_pec_calc(rx_data[ic]);
+		received_pec = rx_data_flattened[(ic * 8) + 6] << 8;
+		received_pec += rx_data_flattened[(ic * 8) + 7];
+
+		if (data_pec != received_pec) {
+			no_errors = 0;
+			pec_mismatches[ic] = 1;
+		}
+		else {
+			pec_mismatches[ic] = 0;
+		}
+	}
+
+	return no_errors;
+}
+
 // Set default configs
 void ADBMS6830_initialize(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
@@ -198,6 +362,22 @@ void ADBMS6830_adax(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	HAL_Delay(5);
 }
 
+// Freeze result registers
+void ADBMS6830_freeze_results(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		tx_cfga[ic][5] = CFGA5 + 0x20; // turn on snapshot bit
+	}
+	ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
+}
+
+// Allow result registers to be updated again
+void ADBMS6830_unfreeze_results(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		tx_cfga[ic][5] = CFGA5; // reset config to default
+	}
+	ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
+}
+
 /*
  \brief Reads back filtered cell voltages from one register group for each IC
 
@@ -205,8 +385,8 @@ void ADBMS6830_adax(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
  @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
  @param[in] RegGroup_t reg filtered cell voltage register group to read from
 
- @param[out] uint8_t voltages[N_OF_ADBMS][6] 2D array containing the data read back (6 bytes per register)
- @param[out] spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
+ @param[out] uint8_t data[N_OF_ADBMS][6] 2D array containing the data read back (6 bytes per register)
+ @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
 
  @returns whether the transaction was successful
  */
@@ -228,161 +408,269 @@ uint8_t ADBMS6830_rdfc_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI 
 		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
 
 		num_tries++;
-		if (num_tries > 2) return 0;
+		if ((num_tries > 2) && try_again) return 0;
 	} while (try_again);
+
+	return 1;
 }
 
 /*
- \brief Calculates and returns the CRC10 of a given register group
-
- @param[in] uint8_t data[]: the array of data that the PEC will be generated from (6 bytes)
-
- @returns The calculated pec10 as an unsigned int16_t
-*/
-uint16_t data_pec_calc(uint8_t data[]) {
-	uint16_t remainder;
-	uint8_t addr;
-
-	remainder = 16; // initialize the PEC
-	for (uint8_t i = 0; i < 6; i++) { // loops for each byte in data array (there are 6 bytes in a register group)
-		addr = (uint8_t)(((remainder >> 2) ^ data[i]) & 0xFF); // calculate PEC table address
-		remainder = (remainder << 8) ^ crc10Table[addr];
-	}
-	return remainder;
-}
-
-/*
- \brief Calculates and returns the CRC15 of a given command
-
- @param[in] uint8_t cmd[2]: the command array that the PEC will be generated from (2 bytes)
-
- @returns The calculated pec15 as an unsigned int16_t
-*/
-uint16_t cmd_pec_calc(uint8_t cmd[2]) {
-	uint16_t remainder;
-	uint8_t addr;
-
-	remainder = 16; // initialize the PEC
-	for (uint8_t i = 0; i < 2; i++) { // loops for each byte in command array
-		addr = (uint8_t)(((remainder >> 7) ^ cmd[i]) & 0xFF); // calculate PEC table address
-		remainder = (remainder << 8) ^ crc15Table[addr];
-	}
-	return remainder * 2; // The CRC15 has a 0 in the LSB so the remainder must be multiplied by 2
-}
-
-
-/*
- \brief Writes an array of bytes out of the SPI port
+ \brief Reads back filtered cell voltages from all register groups from all ICs
 
  @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
  @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
- @param[in] uint8_t cmd[2] the command array to be written on the SPI port (2 bytes)
- @param[in] uint8_t** data the 2D array storing the data arrays to be written on the SPI port
-*/
-void spi_write(SPI_HandleTypeDef* hspi_ptr, // Pointer to the SPI handle
-			   TIM_HandleTypeDef* htim_ptr, // Pointer to a timer handle
-			   uint8_t cmd[2],              // Array of command bytes to be written on the SPI port
-			   uint8_t** data               // 2D array storing data bytes for each IC (can be set to NULL if not a write command)
-			   )
+
+ @param[out] uint8_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS] 2D array containing the voltages
+ @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
+
+ @returns whether the transaction was successful
+ */
+uint8_t ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr,                   // Pointer to the SPI handle
+						   TIM_HandleTypeDef* htim_ptr,                   // Pointer to a timer handle
+						   int16_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS], // Input: 2D array containing voltages
+						   uint8_t spi_faults[N_OF_ADBMS]                 // Input: Array containing flags indicating which nodes had SPI faults
+						   )
 {
-	// Data prep (putting everything into a single array + PEC calculations)
+	const uint8_t CELL_IN_REG = 3; // 6 bytes per register / 2 bytes per cell = 3 cell voltages per register
 
-	uint8_t tx_len = 4; // 2 command bytes + 2 PEC bytes
-	if (data != NULL) tx_len += N_OF_ADBMS * 8; // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
-	uint8_t tx_data[tx_len];
-	uint16_t cmd_pec;
+	// Freeze all result registers for data coherence
+	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
-	tx_data[0] = cmd[0];
-	tx_data[1] = cmd[1];
+	for (uint8_t reg = 0; reg < 5; reg++) {
+		uint8_t data[N_OF_ADBMS][6];
+		uint8_t transaction_successful = ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_faults);
 
-	cmd_pec = cmd_pec_calc(cmd);
-	tx_data[2] = HI8(cmd_pec);
-	tx_data[3] = LO8(cmd_pec);
-
-	if (data != NULL) {
-		uint8_t idx = 4;
-
-		for (uint8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) { // Data written to last IC in the chain first and first IC in the chain last (see bus protocols in datasheet)
-			uint16_t data_pec;
-
-			for (uint8_t i = 0; i < 6; i++) {
-				tx_data[idx] = data[ic][i];
-				idx++;
+		// Parse voltages and package them into 2D array
+		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+			for (uint8_t cell = 0; cell < CELL_IN_REG; cell++) {
+				int16_t parsed_voltage = (int16_t)((data[ic][(cell * 2) + 1] << 8) + data[ic][cell * 2]);
+				voltages[ic][(reg * CELL_IN_REG) + cell] = parsed_voltage;
 			}
+		}
 
-			data_pec = data_pec_calc(data[ic]);
-			tx_data[idx] = HI8(data_pec);
-			tx_data[idx + 1] = LO8(data_pec);
-			idx += 2;
+		if (!transaction_successful) {
+			ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
+			return 0;
 		}
 	}
 
-	// Data transmission
-
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
-	delay_500_ns(htim_ptr);
-
-	HAL_SPI_Transmit(hspi_ptr, tx_data, tx_len, 100);
-	delay_500_ns(htim_ptr);
-
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-	delay_us(htim_ptr, 2);
+	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
+	return 1;
 }
 
-
 /*
- \brief Writes and reads a set number of bytes using the SPI port.
+ \brief Reads back auxiliary voltages from one register group for each IC
 
  @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
  @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
- @param[in] uint8_t cmd[2] the command array to be written on the SPI port (2 bytes)
+ @param[in] RegGroup_t reg auxiliary register group to read from
 
- @param[out] uint8_t rx_data[N_OF_ADBMS][6] 2D array that read data will be written to (6 bytes per IC)
- @param[out] uint8_t pec_mismatches Array containing flags indicating which nodes had PEC mismatches
+ @param[out] uint8_t data[N_OF_ADBMS][6] 2D array containing the data read back (6 bytes per register)
+ @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
 
- @returns Whether the transaction occurred without any PEC mismatches
-*/
-uint8_t spi_write_read(SPI_HandleTypeDef* hspi_ptr,        // Pointer to the SPI handle
-					   TIM_HandleTypeDef* htim_ptr,        // Pointer to a timer handle
-					   uint8_t cmd[2],                     // Array of command bytes to be written on SPI port
-					   uint8_t rx_data[N_OF_ADBMS][6],     // Input: 2D array that will store the data read by the SPI port
-					   uint8_t pec_mismatches[N_OF_ADBMS]  // Input: Array containing flags indicating which nodes had PEC mismatches
-					   )
+ @returns whether the transaction was successful
+ */
+uint8_t ADBMS6830_rdaux_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
+						    TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
+						    RegGroup_t reg,                // Option: filtered cell voltage register group to read from
+						    uint8_t data[N_OF_ADBMS][6],   // Input: 2D array containing the data read back
+						    uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
+						    )
 {
-	uint8_t rx_len = N_OF_ADBMS * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
-	uint8_t rx_data_flattened[N_OF_ADBMS * 8]; // array to store data from all ICs
-	uint8_t no_errors = 1;
+	uint8_t cmd[2];
+	cmd[0] = 0x00;
+	cmd[1] = 0x19 + (uint8_t)reg;
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
-	delay_500_ns(htim_ptr);
+	uint8_t num_tries = 0;
+	uint8_t try_again = 0;
 
-	HAL_SPI_Transmit(hspi_ptr, cmd, 4, 100);
-	HAL_SPI_Receive(hspi_ptr, rx_data_flattened, rx_len, 100);
-	delay_500_ns(htim_ptr);
+	do {
+		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-	delay_us(htim_ptr, 2);
+		num_tries++;
+		if ((num_tries > 2) && try_again) return 0;
+	} while (try_again);
 
-	// Package data (excluding PEC) into 2D array and process PECs
-	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) { // Data read from first IC in the chain first and last IC in the chain last (see bus protocols in datasheet)
-		uint16_t data_pec, received_pec;
+	return 1;
+}
 
-		for (uint8_t i = 0; i < 6; i++) {
-			rx_data[ic][i] = rx_data_flattened[(8 * ic) + i];
+/*
+ \brief Reads ADC reading from one aux pin for each IC
+
+ @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
+ @param[in] TIM_HandletypeDef* htim_ptr pointer to a timer handle
+ @param[in] AuxPin_t pin the auxiliary pin to read from
+
+ @param[out] int16_t aux[N_OF_ADBMS] Array to read ADC conversions into
+ @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
+
+ @returns whether the transaction was successful
+ */
+uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
+							TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
+							AuxPin_t pin,                  // Option: Auxiliary pin to read from
+							int16_t aux[N_OF_ADBMS],       // Input: Array to read ADC conversions into
+							uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
+						    )
+{
+	uint8_t cmd[2];
+	cmd[0] = 0x00;
+
+	uint8_t data[N_OF_ADBMS][6]; // 6 bytes per register
+	uint8_t lsb_idx;
+	uint8_t try_again = 0;
+	uint8_t num_tries = 0;
+
+	// Check if pin is a GPIO pin
+	if (pin < VREF2) {
+		uint8_t reg = (uint8_t)pin / 3;
+		cmd[1] = 0x19 + reg;
+
+		do {
+			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
+
+			num_tries++;
+			if ((num_tries > 2) && try_again) return 0;
+		} while (try_again);
+
+		uint8_t offset = reg * 3;
+		lsb_idx = ((uint8_t)pin - offset) * 2;
+	}
+	else if ((pin == VREF2) || (pin == ITEMP) || (pin == RESERVED)) {
+		cmd[1] = 0x30;
+
+		do {
+			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
+
+			num_tries++;
+			if ((num_tries > 2) && try_again) return 0;
+		} while (try_again);
+
+		if (pin == VREF2) lsb_idx = 0;
+		else if (pin == ITEMP) lsb_idx = 2;
+		else lsb_idx = 4;
+	}
+	else if ((pin == VD) || (pin == VA) || (pin == VRES)) {
+		cmd[1] = 0x31;
+
+		do {
+			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
+
+			num_tries++;
+			if ((num_tries > 2) && try_again) return 0;
+		} while (try_again);
+
+		if (pin == VD) lsb_idx = 0;
+		else if (pin == VA) lsb_idx = 2;
+		else lsb_idx = 4;
+	}
+
+	else if ((pin == VPV) || (pin == VMV)) {
+		cmd[1] = 0x1F;
+
+		do {
+			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
+
+			num_tries++;
+			if ((num_tries > 2) && try_again) return 0;
+		} while (try_again);
+
+		if (pin == VMV) lsb_idx = 2;
+		else lsb_idx = 4;
+	}
+
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		aux[ic] = (int16_t)((data[ic][lsb_idx + 1] << 8) + data[ic][lsb_idx]);
+	}
+
+	return 1;
+}
+
+/*
+ \brief Reads back raw ADC readings from GPIOs, which are connected to thermistors
+
+ @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
+ @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
+
+ @param[out] int16_t raw_temp_voltages[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS] 2D array containing the ADC readings
+ @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
+
+ @returns whether the transaction was successful
+ */
+uint8_t ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr,                                 // Pointer to the SPI handle
+							              TIM_HandleTypeDef* htim_ptr,                                 // Pointer to a timer handle
+							              int16_t raw_temp_voltages[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS], // Input: 2D array containing the ADC readings
+							              uint8_t spi_faults[N_OF_ADBMS]                               // Input: Array containing flags indicating which nodes had SPI faults
+							              )
+{
+	const uint8_t TEMP_IN_REG = 3; // 6 register bytes / 2 bytes per voltage = 3 temp voltages per register
+
+	// Freeze all result registers for data coherence
+	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
+
+	for (uint8_t reg = 0; reg < 4; reg++) {
+		uint8_t data[N_OF_ADBMS][6];
+		uint8_t transaction_successful = ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_faults);
+
+		// Parse voltages and package them into 2D array
+		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+			if (reg < 3) {
+				for (uint8_t temp = 0; temp < TEMP_IN_REG; temp++) {
+					int16_t parsed_voltage = (int16_t)((data[ic][(temp * 2) + 1] << 8) + data[ic][temp * 2]);
+					raw_temp_voltages[ic][(reg * TEMP_IN_REG) + temp] = parsed_voltage;
+				}
+			}
+			else {
+				int16_t gpio10_voltage = (int16_t)((data[ic][1] << 8) + data[ic][0]);
+				raw_temp_voltages[ic][CELL_TEMPS_PER_ADBMS - 1] = gpio10_voltage;
+			}
 		}
 
-		data_pec = data_pec_calc(rx_data);
-		received_pec = rx_data_flattened[(8 * ic) + 6] << 8;
-		received_pec += rx_data_flattened[(8 * ic) + 7];
-
-		if (data_pec != received_pec) {
-			no_errors = 0;
-			pec_mismatches[ic] = 1;
-		}
-		else {
-			pec_mismatches[ic] = 0;
+		if (!transaction_successful) {
+			ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
+			return 0;
 		}
 	}
 
-	return no_errors;
+	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
+	return 1;
+}
+
+/*
+ \brief Reads back all cell voltage mismatches detected during the redundancy check
+
+ @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
+ @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
+
+ @param[out] uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS] 2D array containing the mismatch flags for each IC
+ @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
+
+ @returns whether the transaction was successful
+ */
+uint8_t ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr,                     // Pointer to the SPI handle
+								   TIM_HandleTypeDef* htim_ptr,                     // Pointer to a timer handle
+								   uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS], // Input: 2D array containing the mismatch flags for each IC
+								   uint8_t spi_faults[N_OF_ADBMS]                   // Input: Array containing flags indicating which nodes had SPI faults
+								   )
+{
+	uint8_t data[N_OF_ADBMS][6]; // 6 bytes per register
+	uint8_t cmd[2] = {0x00, 0x32};
+	uint8_t try_again = 0;
+	uint8_t num_tries = 0;
+
+	do {
+		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
+
+		num_tries++;
+		if ((num_tries > 2) && try_again) return 0;
+	} while (try_again);
+
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		for (uint8_t reg_idx = 0; reg_idx < 2; reg_idx++) {
+			for (uint8_t bit = 0; bit < 8; bit++) {
+				if ((reg_idx == 1) && (bit == 7)) break; // Ignore CS16FLT since we only have 15 cells
+				mismatches[ic][(reg_idx * 8) + bit] = (data[ic][reg_idx] >> bit) & 0x01;
+			}
+		}
+	}
 }

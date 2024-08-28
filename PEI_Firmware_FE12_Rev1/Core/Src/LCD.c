@@ -110,7 +110,7 @@ void LCD_ReturnHome(TIM_HandleTypeDef* htim_ptr) {
 	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, 0x02, 1, htim_ptr);
 }
 
-void LCD_Position(uint8_t row_idx, uint8_t col_idx, TIM_HandleTypeDef* htim_ptr) {
+void LCD_Position(TIM_HandleTypeDef* htim_ptr, uint8_t row_idx, uint8_t col_idx) {
 	uint8_t instruction = 0x80;
 	uint8_t ddram_addr = 0;
 
@@ -121,7 +121,7 @@ void LCD_Position(uint8_t row_idx, uint8_t col_idx, TIM_HandleTypeDef* htim_ptr)
 	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, instruction, 1, htim_ptr);
 }
 
-void LCD_PrintString(char* str, TIM_HandleTypeDef* htim_ptr) {
+void LCD_PrintString(TIM_HandleTypeDef* htim_ptr, char* str) {
 	uint8_t index = 0;
 	uint8_t character = str[index];
 
