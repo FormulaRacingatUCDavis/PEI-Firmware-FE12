@@ -13,4 +13,7 @@
 uint8_t HI8(uint16_t word);
 uint8_t LO8(uint16_t word);
 
+uint8_t HI4(uint8_t byte);
+uint8_t LO4(uint8_t byte);
+
 #endif /* INC_WORD_PROCESSING_H_ */

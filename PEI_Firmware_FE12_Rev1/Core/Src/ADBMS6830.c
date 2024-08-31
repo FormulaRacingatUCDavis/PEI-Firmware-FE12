@@ -138,7 +138,7 @@ uint8_t spi_write_read(SPI_HandleTypeDef* hspi_ptr,        // Pointer to the SPI
 					   )
 {
 	uint8_t rx_len = N_OF_ADBMS * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
-	uint8_t rx_data_flattened[N_OF_ADBMS * 8]; // array to store data from all ICs
+	uint8_t rx_data_flattened[rx_len]; // array to store data from all ICs
 	uint8_t tx_data[4];
 	uint16_t cmd_pec;
 	uint8_t no_errors = 1;
@@ -292,8 +292,8 @@ void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr,
 	if (cell_num < 13) {
 		reg_idx = (cell_num - 1) / 2;
 
-		if ((cell_num % 2) == 0) config_val += LO8(tx_wrpwma[ic_num][reg_idx]);
-		else config_val += HI8(tx_wrpwma[ic_num][reg_idx]) << 8;
+		if ((cell_num % 2) == 0) config_val += LO4(tx_wrpwma[ic_num][reg_idx]);
+		else config_val += HI4(tx_wrpwma[ic_num][reg_idx]) << 4;
 		tx_wrpwma[ic_num][reg_idx] = config_val;
 
 		ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
@@ -301,8 +301,8 @@ void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr,
 	else {
 		reg_idx = (cell_num - 13) / 2;
 
-		if ((cell_num % 2) == 0) config_val += LO8(tx_wrpwmb[ic_num][reg_idx]);
-		else config_val += HI8(tx_wrpwmb[ic_num][reg_idx]) << 8;
+		if ((cell_num % 2) == 0) config_val += LO4(tx_wrpwmb[ic_num][reg_idx]);
+		else config_val += HI4(tx_wrpwmb[ic_num][reg_idx]) << 4;
 		tx_wrpwmb[ic_num][reg_idx] = config_val;
 
 		ADBMS6830_wrpwmb(hspi_ptr, htim_ptr);
@@ -436,7 +436,7 @@ uint8_t ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr,                   // Poi
 	// Freeze all result registers for data coherence
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
-	for (uint8_t reg = 0; reg < 5; reg++) {
+	for (uint8_t reg = 0; reg < 4; reg++) {
 		uint8_t data[N_OF_ADBMS][6];
 		uint8_t transaction_successful = ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_faults);
 
@@ -526,25 +526,11 @@ uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI
 		uint8_t reg = (uint8_t)pin / 3;
 		cmd[1] = 0x19 + reg;
 
-		do {
-			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
-
-			num_tries++;
-			if ((num_tries > 2) && try_again) return 0;
-		} while (try_again);
-
 		uint8_t offset = reg * 3;
 		lsb_idx = ((uint8_t)pin - offset) * 2;
 	}
 	else if ((pin == VREF2) || (pin == ITEMP) || (pin == RESERVED)) {
 		cmd[1] = 0x30;
-
-		do {
-			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
-
-			num_tries++;
-			if ((num_tries > 2) && try_again) return 0;
-		} while (try_again);
 
 		if (pin == VREF2) lsb_idx = 0;
 		else if (pin == ITEMP) lsb_idx = 2;
@@ -552,13 +538,6 @@ uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI
 	}
 	else if ((pin == VD) || (pin == VA) || (pin == VRES)) {
 		cmd[1] = 0x31;
-
-		do {
-			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
-
-			num_tries++;
-			if ((num_tries > 2) && try_again) return 0;
-		} while (try_again);
 
 		if (pin == VD) lsb_idx = 0;
 		else if (pin == VA) lsb_idx = 2;
@@ -568,16 +547,16 @@ uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI
 	else if ((pin == VPV) || (pin == VMV)) {
 		cmd[1] = 0x1F;
 
-		do {
-			try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
-
-			num_tries++;
-			if ((num_tries > 2) && try_again) return 0;
-		} while (try_again);
-
 		if (pin == VMV) lsb_idx = 2;
 		else lsb_idx = 4;
 	}
+
+	do {
+		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
+
+		num_tries++;
+		if ((num_tries > 2) && try_again) return 0;
+	} while (try_again);
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		aux[ic] = (int16_t)((data[ic][lsb_idx + 1] << 8) + data[ic][lsb_idx]);
@@ -668,7 +647,7 @@ uint8_t ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr,                 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		for (uint8_t reg_idx = 0; reg_idx < 2; reg_idx++) {
 			for (uint8_t bit = 0; bit < 8; bit++) {
-				if ((reg_idx == 1) && (bit == 7)) break; // Ignore CS16FLT since we only have 15 cells
+				if ((reg_idx == 1) && (bit == 4)) break; // Ignore flags past CS12FLT since we only have 12 cells per IC
 				mismatches[ic][(reg_idx * 8) + bit] = (data[ic][reg_idx] >> bit) & 0x01;
 			}
 		}

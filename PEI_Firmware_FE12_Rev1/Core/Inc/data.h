@@ -8,10 +8,10 @@
 #ifndef INC_DATA_H_
 #define INC_DATA_H_
 
-#define N_OF_SUBPACK 8u // number of subpacks
+#define N_OF_SUBPACK 5u // number of subpacks
 
-#define IC_PER_SUBPACK 1u // 6830 per subpack
-#define CELLS_PER_ADBMS 15u   // number of cells per LTC
+#define IC_PER_SUBPACK 2u // 6830 per subpack
+#define CELLS_PER_ADBMS 12u   // number of cells per LTC
 #define CELL_TEMPS_PER_ADBMS 10u
 
 #define CELL_TEMPS_PER_PACK (CELL_TEMPS_PER_ADBMS * IC_PER_SUBPACK)
