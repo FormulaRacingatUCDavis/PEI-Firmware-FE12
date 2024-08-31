@@ -142,7 +142,7 @@ typedef enum {
 } RegGroup_t;
 
 // Default values for CFGA registers
-#define CFGA0 0x80 // REFON enabled (same as last year)
+#define CFGA0 0x81 // REFON enabled (same as last year), C-ADC vs S-ADC comparison voltage threshold set to its default (8.1 mV)
 #define CFGA1 0x00
 #define CFGA2 0x80 // Soak time enabled for Aux GPIO
 #define CFGA3 0xFF // Pull-down resistor disabled for Aux GPIO 1-8
