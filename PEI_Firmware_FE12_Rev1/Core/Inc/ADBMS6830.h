@@ -179,7 +179,8 @@ void ADBMS6830_set_C_ADC(uint8_t RD, uint8_t CONT, uint8_t DCP, uint8_t RSTF, ui
 void ADBMS6830_set_S_ADC(uint8_t CONT, uint8_t DCP, uint8_t OW);
 void ADBMS6830_set_Aux_ADC(uint8_t OW, uint8_t PUP, uint8_t CH);
 
-void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint8_t discharge_enable, uint8_t ic_num, uint8_t cell_num);
+void ADBMS6830_set_discharge(uint8_t discharge_enable, uint8_t ic_num, uint8_t cell_num);
+void ADBMS6830_reset_discharge();
 
 void ADBMS6830_wakeup(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void ADBMS6830_wrcfga(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
@@ -191,9 +192,9 @@ void ADBMS6830_adcv(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void ADBMS6830_adsv(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void ADBMS6830_adax(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
-uint8_t ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, int16_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS], uint8_t spi_faults[N_OF_ADBMS]);
-uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, AuxPin_t pin, int16_t aux[N_OF_ADBMS], uint8_t spi_faults[N_OF_ADBMS]);
-uint8_t ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, int16_t raw_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS], uint8_t spi_faults[N_OF_ADBMS]);
-uint8_t ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS], uint8_t spi_faults[N_OF_ADBMS]);
+void ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, int16_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
+void ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, AuxPin_t pin, int16_t aux[N_OF_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
+void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, int16_t raw_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
+void ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
 
 #endif /* INC_ADBMS6830_H_ */
