@@ -387,15 +387,13 @@ void ADBMS6830_unfreeze_results(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* 
 
  @param[out] uint8_t data[N_OF_ADBMS][6] 2D array containing the data read back (6 bytes per register)
  @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
-
- @returns whether the transaction was successful
  */
-uint8_t ADBMS6830_rdfc_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
-					   	   TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
-						   RegGroup_t reg,                // Option: filtered cell voltage register group to read from
-						   uint8_t data[N_OF_ADBMS][6],   // Input: 2D array containing the data read back
-						   uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
-					   	   )
+void ADBMS6830_rdfc_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
+					   	TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
+						RegGroup_t reg,                // Option: filtered cell voltage register group to read from
+						uint8_t data[N_OF_ADBMS][6],   // Input: 2D array containing the data read back
+						uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
+					   	)
 {
 	uint8_t cmd[2];
 	cmd[0] = 0x00;
@@ -408,10 +406,8 @@ uint8_t ADBMS6830_rdfc_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI 
 		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
 
 		num_tries++;
-		if ((num_tries > 2) && try_again) return 0;
+		if ((num_tries > 2) && try_again) return;
 	} while (try_again);
-
-	return 1;
 }
 
 /*
@@ -422,14 +418,12 @@ uint8_t ADBMS6830_rdfc_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI 
 
  @param[out] uint8_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS] 2D array containing the voltages
  @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
-
- @returns whether the transaction was successful
  */
-uint8_t ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr,                   // Pointer to the SPI handle
-						   TIM_HandleTypeDef* htim_ptr,                   // Pointer to a timer handle
-						   int16_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS], // Input: 2D array containing voltages
-						   uint8_t spi_faults[N_OF_ADBMS]                 // Input: Array containing flags indicating which nodes had SPI faults
-						   )
+void ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr,                   // Pointer to the SPI handle
+						TIM_HandleTypeDef* htim_ptr,                   // Pointer to a timer handle
+						int16_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS], // Input: 2D array containing voltages
+						uint8_t spi_faults[N_OF_ADBMS]                 // Input: Array containing flags indicating which nodes had SPI faults
+						)
 {
 	const uint8_t CELL_IN_REG = 3; // 6 bytes per register / 2 bytes per cell = 3 cell voltages per register
 
@@ -438,24 +432,20 @@ uint8_t ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr,                   // Poi
 
 	for (uint8_t reg = 0; reg < 4; reg++) {
 		uint8_t data[N_OF_ADBMS][6];
-		uint8_t transaction_successful = ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_faults);
+		ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_faults);
 
 		// Parse voltages and package them into 2D array
 		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-			for (uint8_t cell = 0; cell < CELL_IN_REG; cell++) {
-				int16_t parsed_voltage = (int16_t)((data[ic][(cell * 2) + 1] << 8) + data[ic][cell * 2]);
-				voltages[ic][(reg * CELL_IN_REG) + cell] = parsed_voltage;
+			if (!spi_faults[ic]) {
+				for (uint8_t cell = 0; cell < CELL_IN_REG; cell++) {
+					int16_t parsed_voltage = (int16_t)((data[ic][(cell * 2) + 1] << 8) + data[ic][cell * 2]);
+					voltages[ic][(reg * CELL_IN_REG) + cell] = parsed_voltage;
+				}
 			}
-		}
-
-		if (!transaction_successful) {
-			ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
-			return 0;
 		}
 	}
 
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
-	return 1;
 }
 
 /*
@@ -467,15 +457,13 @@ uint8_t ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr,                   // Poi
 
  @param[out] uint8_t data[N_OF_ADBMS][6] 2D array containing the data read back (6 bytes per register)
  @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
-
- @returns whether the transaction was successful
  */
-uint8_t ADBMS6830_rdaux_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
-						    TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
-						    RegGroup_t reg,                // Option: filtered cell voltage register group to read from
-						    uint8_t data[N_OF_ADBMS][6],   // Input: 2D array containing the data read back
-						    uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
-						    )
+void ADBMS6830_rdaux_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
+						 TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
+						 RegGroup_t reg,                // Option: filtered cell voltage register group to read from
+						 uint8_t data[N_OF_ADBMS][6],   // Input: 2D array containing the data read back
+						 uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
+						 )
 {
 	uint8_t cmd[2];
 	cmd[0] = 0x00;
@@ -488,10 +476,8 @@ uint8_t ADBMS6830_rdaux_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI
 		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
 
 		num_tries++;
-		if ((num_tries > 2) && try_again) return 0;
+		if ((num_tries > 2) && try_again) return;
 	} while (try_again);
-
-	return 1;
 }
 
 /*
@@ -503,15 +489,13 @@ uint8_t ADBMS6830_rdaux_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI
 
  @param[out] int16_t aux[N_OF_ADBMS] Array to read ADC conversions into
  @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
-
- @returns whether the transaction was successful
  */
-uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
-							TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
-							AuxPin_t pin,                  // Option: Auxiliary pin to read from
-							int16_t aux[N_OF_ADBMS],       // Input: Array to read ADC conversions into
-							uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
-						    )
+void ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI handle
+						 TIM_HandleTypeDef* htim_ptr,   // Pointer to a timer handle
+						 AuxPin_t pin,                  // Option: Auxiliary pin to read from
+						 int16_t aux[N_OF_ADBMS],       // Input: Array to read ADC conversions into
+						 uint8_t spi_faults[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had SPI faults
+						 )
 {
 	uint8_t cmd[2];
 	cmd[0] = 0x00;
@@ -555,14 +539,14 @@ uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI
 		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
 
 		num_tries++;
-		if ((num_tries > 2) && try_again) return 0;
+		if ((num_tries > 2) && try_again) break;
 	} while (try_again);
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-		aux[ic] = (int16_t)((data[ic][lsb_idx + 1] << 8) + data[ic][lsb_idx]);
+		if (!spi_faults[ic]) {
+			aux[ic] = (int16_t)((data[ic][lsb_idx + 1] << 8) + data[ic][lsb_idx]);
+		}
 	}
-
-	return 1;
 }
 
 /*
@@ -573,14 +557,12 @@ uint8_t ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI
 
  @param[out] int16_t raw_temp_voltages[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS] 2D array containing the ADC readings
  @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
-
- @returns whether the transaction was successful
  */
-uint8_t ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr,                                 // Pointer to the SPI handle
-							              TIM_HandleTypeDef* htim_ptr,                                 // Pointer to a timer handle
-							              int16_t raw_temp_voltages[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS], // Input: 2D array containing the ADC readings
-							              uint8_t spi_faults[N_OF_ADBMS]                               // Input: Array containing flags indicating which nodes had SPI faults
-							              )
+void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr,                                 // Pointer to the SPI handle
+							           TIM_HandleTypeDef* htim_ptr,                                 // Pointer to a timer handle
+							           int16_t raw_temp_voltages[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS], // Input: 2D array containing the ADC readings
+							           uint8_t spi_faults[N_OF_ADBMS]                               // Input: Array containing flags indicating which nodes had SPI faults
+							           )
 {
 	const uint8_t TEMP_IN_REG = 3; // 6 register bytes / 2 bytes per voltage = 3 temp voltages per register
 
@@ -593,26 +575,22 @@ uint8_t ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr,          
 
 		// Parse voltages and package them into 2D array
 		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-			if (reg < 3) {
-				for (uint8_t temp = 0; temp < TEMP_IN_REG; temp++) {
-					int16_t parsed_voltage = (int16_t)((data[ic][(temp * 2) + 1] << 8) + data[ic][temp * 2]);
-					raw_temp_voltages[ic][(reg * TEMP_IN_REG) + temp] = parsed_voltage;
+			if (!spi_faults[ic]) {
+				if (reg < 3) {
+					for (uint8_t temp = 0; temp < TEMP_IN_REG; temp++) {
+						int16_t parsed_voltage = (int16_t)((data[ic][(temp * 2) + 1] << 8) + data[ic][temp * 2]);
+						raw_temp_voltages[ic][(reg * TEMP_IN_REG) + temp] = parsed_voltage;
+					}
+				}
+				else {
+					int16_t gpio10_voltage = (int16_t)((data[ic][1] << 8) + data[ic][0]);
+					raw_temp_voltages[ic][CELL_TEMPS_PER_ADBMS - 1] = gpio10_voltage;
 				}
 			}
-			else {
-				int16_t gpio10_voltage = (int16_t)((data[ic][1] << 8) + data[ic][0]);
-				raw_temp_voltages[ic][CELL_TEMPS_PER_ADBMS - 1] = gpio10_voltage;
-			}
-		}
-
-		if (!transaction_successful) {
-			ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
-			return 0;
 		}
 	}
 
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
-	return 1;
 }
 
 /*
@@ -623,14 +601,12 @@ uint8_t ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr,          
 
  @param[out] uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS] 2D array containing the mismatch flags for each IC
  @param[out] uint8_t spi_faults[N_OF_ADBMS] Array containing flags indicating which nodes had SPI faults
-
- @returns whether the transaction was successful
  */
-uint8_t ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr,                     // Pointer to the SPI handle
-								   TIM_HandleTypeDef* htim_ptr,                     // Pointer to a timer handle
-								   uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS], // Input: 2D array containing the mismatch flags for each IC
-								   uint8_t spi_faults[N_OF_ADBMS]                   // Input: Array containing flags indicating which nodes had SPI faults
-								   )
+void ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr,                     // Pointer to the SPI handle
+								TIM_HandleTypeDef* htim_ptr,                     // Pointer to a timer handle
+								uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS], // Input: 2D array containing the mismatch flags for each IC
+								uint8_t spi_faults[N_OF_ADBMS]                   // Input: Array containing flags indicating which nodes had SPI faults
+								)
 {
 	uint8_t data[N_OF_ADBMS][6]; // 6 bytes per register
 	uint8_t cmd[2] = {0x00, 0x32};
@@ -641,17 +617,17 @@ uint8_t ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr,                 
 		try_again = !spi_write_read(hspi_ptr, htim_ptr, cmd, data, spi_faults);
 
 		num_tries++;
-		if ((num_tries > 2) && try_again) return 0;
+		if ((num_tries > 2) && try_again) break;
 	} while (try_again);
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-		for (uint8_t reg_idx = 0; reg_idx < 2; reg_idx++) {
-			for (uint8_t bit = 0; bit < 8; bit++) {
-				if ((reg_idx == 1) && (bit == 4)) break; // Ignore flags past CS12FLT since we only have 12 cells per IC
-				mismatches[ic][(reg_idx * 8) + bit] = (data[ic][reg_idx] >> bit) & 0x01;
+		if (!spi_faults[ic]) {
+			for (uint8_t reg_idx = 0; reg_idx < 2; reg_idx++) {
+				for (uint8_t bit = 0; bit < 8; bit++) {
+					if ((reg_idx == 1) && (bit == 4)) break; // Ignore flags past CS12FLT since we only have 12 cells per IC
+					mismatches[ic][(reg_idx * 8) + bit] = (data[ic][reg_idx] >> bit) & 0x01;
+				}
 			}
 		}
 	}
-
-	return 1;
 }
