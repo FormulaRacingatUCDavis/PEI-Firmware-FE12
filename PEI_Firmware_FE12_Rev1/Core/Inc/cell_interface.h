@@ -70,11 +70,15 @@ typedef struct {
 
 typedef struct {
 	BAT_SUBPACK_t subpacks[N_OF_SUBPACK];
+	int16_t voltage_raw;
 	double voltage;
-	int16_t current;
+	double LO_voltage;
+	uint16_t current_raw;
+	double current;
+	int16_t HI_temp_raw;
+	uint8_t HI_temp_c;
 	uint8_t status;
 	uint8_t SOC_percent;
-	double LO_voltage;
 	uint16_t spi_error_address;
 	uint8_t spi_error_counters[N_OF_ADBMS];
 };
