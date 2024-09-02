@@ -94,8 +94,9 @@ void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw);
 double get_cell_temp(uint8_t subpack_num, uint8_t temp_num);
 int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num);
 
-void get_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void get_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void get_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+
 void cell_redundancy_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void cell_open_wire_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 

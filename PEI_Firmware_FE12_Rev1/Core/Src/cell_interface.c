@@ -9,6 +9,7 @@
 #include <math.h>
 
 #include "cell_interface.h"
+#include "ADBMS6830.h"
 
 BAT_PACK_t bat_pack;
 
@@ -80,4 +81,53 @@ double get_cell_temp(uint8_t subpack_num, uint8_t temp_num) {
 
 int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num) {
 	return bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw;
+}
+
+void update_spi_errors(uint8_t spi_errors[N_OF_ADBMS]) {
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		bat_pack.spi_error_counters[ic] += spi_errors[ic];
+		if (bat_pack.spi_error_counters[ic] > SPI_ERROR_LIMIT) {
+			bat_pack.spi_fault_addresses |= 1u << ic;
+		}
+	}
+}
+
+void get_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	int16_t cell_voltages[N_OF_ADBMS][CELLS_PER_ADBMS];
+	uint8_t spi_errors[N_OF_ADBMS];
+
+	ADBMS6830_rdfc_all(hspi_ptr, htim_ptr, cell_voltages, spi_errors);
+	update_spi_errors(spi_errors);
+
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		// Move voltages into bat_pack if no SPI error
+		if (!spi_errors[ic]) {
+			for (uint8_t cell = 0; cell < CELLS_PER_ADBMS; cell++) {
+				set_voltage(ic / IC_PER_SUBPACK,
+							((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell,
+							cell_voltages[ic][cell]
+							);
+			}
+		}
+	}
+}
+
+void get_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	int16_t cell_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS];
+	uint8_t spi_errors[N_OF_ADBMS];
+
+	ADBMS6830_rdaux_raw_temp_voltages(hspi_ptr, htim_ptr, cell_temps, spi_errors);
+	update_spi_errors(spi_errors);
+
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		// Move temps into bat_pack if no SPI error
+		if (!spi_errors[ic]) {
+			for (uint8_t temp = 0; temp < CELL_TEMPS_PER_ADBMS; temp++) {
+				set_cell_temp(ic / IC_PER_SUBPACK,
+							  ((ic % IC_PER_SUBPACK) * CELL_TEMPS_PER_ADBMS) + temp,
+							  cell_temps[ic][temp]
+							  );
+			}
+		}
+	}
 }
