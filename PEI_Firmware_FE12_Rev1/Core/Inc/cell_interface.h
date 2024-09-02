@@ -9,6 +9,7 @@
 #define INC_CELL_INTERFACE_H_
 
 #include <stdint.h>
+#include "stm32f7xx_hal.h"
 
 #include "data.h"
 
@@ -70,20 +71,28 @@ typedef struct {
 
 typedef struct {
 	BAT_SUBPACK_t subpacks[N_OF_SUBPACK];
-	int16_t voltage_raw;
-	double voltage;
+	int16_t total_voltage_raw;
+	double total_voltage;
 	double LO_voltage;
 	uint16_t current_raw;
 	double current;
 	int16_t HI_temp_raw;
 	uint8_t HI_temp_c;
-	uint8_t status;
 	uint8_t SOC_percent;
-	uint16_t spi_error_address;
-	uint8_t spi_error_counters[N_OF_ADBMS];
-};
+	uint8_t status;
+	uint16_t spi_fault_addresses; // Stores the SPI fault flags for all ICs in a single bit string
+	uint8_t spi_error_counters[N_OF_ADBMS]; // Stores the number of SPI communication errors for each IC
+} BAT_PACK_t;
 
-void cell_interface_init();
+void cell_interface_init(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+
+void set_voltage(uint8_t subpack_num, uint8_t cell_num, int16_t voltage_raw);
+double get_voltage(uint8_t subpack_num, uint8_t cell_num);
+int16_t get_voltage_raw(uint8_t subpack_num, uint8_t cell_num);
+
+void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw);
+double get_cell_temp(uint8_t subpack_num, uint8_t temp_num);
+int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num);
 
 void get_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void get_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
