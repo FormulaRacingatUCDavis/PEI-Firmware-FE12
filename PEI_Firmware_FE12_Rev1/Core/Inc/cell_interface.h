@@ -43,11 +43,11 @@ typedef enum {
 } BMS_MODE_t;
 
 typedef enum {
-	OVERVOLT, UNDERVOLT, OPEN_WIRE, RD_FAIL
+	NORMAL, OVERVOLT, UNDERVOLT, OPEN_WIRE, RD_FAIL
 } Cell_ErrorType_t;
 
 typedef enum {
-	OVERTEMP, UNDERTEMP
+	NORMAL, OVERTEMP, UNDERTEMP
 } Temp_ErrorType_t;
 
 typedef struct {
@@ -74,13 +74,14 @@ typedef struct {
 	int16_t total_voltage_raw;
 	double total_voltage;
 	double LO_voltage;
+	uint16_t current_ref_raw;
 	uint16_t current_raw;
 	double current;
 	int16_t HI_temp_raw;
 	uint8_t HI_temp_c;
 	uint8_t SOC_percent;
 	uint8_t status;
-	uint16_t spi_fault_addresses; // Stores the SPI fault flags for all ICs in a single bit string
+	uint16_t spi_fault_addresses; // Stores the SPI fault flags for all ICs in a bit string
 	uint8_t spi_error_counters[N_OF_ADBMS]; // Stores the number of SPI communication errors for each IC
 } BAT_PACK_t;
 
