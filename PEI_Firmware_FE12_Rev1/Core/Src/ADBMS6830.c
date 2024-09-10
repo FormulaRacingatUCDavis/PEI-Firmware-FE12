@@ -584,22 +584,17 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr,             
 	// Freeze all result registers for data coherence
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
-	for (uint8_t reg = 0; reg < 4; reg++) {
+	for (uint8_t reg = 0; reg < 3; reg++) {
 		uint8_t data[N_OF_ADBMS][6];
-		uint8_t transaction_successful = ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_errors);
+		ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_errors);
 
 		// Parse voltages and package them into 2D array
 		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 			if (!spi_errors[ic]) {
-				if (reg < 3) {
-					for (uint8_t temp = 0; temp < TEMP_IN_REG; temp++) {
-						int16_t parsed_voltage = (int16_t)((data[ic][(temp * 2) + 1] << 8) + data[ic][temp * 2]);
-						raw_temp_voltages[ic][(reg * TEMP_IN_REG) + temp] = parsed_voltage;
-					}
-				}
-				else {
-					int16_t gpio10_voltage = (int16_t)((data[ic][1] << 8) + data[ic][0]);
-					raw_temp_voltages[ic][CELL_TEMPS_PER_ADBMS - 1] = gpio10_voltage;
+				for (uint8_t temp = 0; temp < TEMP_IN_REG; temp++) {
+					if ((reg == 2) && (temp == 2)) break; // Ignore G9V since there are only 8 cell temps per IC
+					int16_t parsed_voltage = (int16_t)((data[ic][(temp * 2) + 1] << 8) + data[ic][temp * 2]);
+					raw_temp_voltages[ic][(reg * TEMP_IN_REG) + temp] = parsed_voltage;
 				}
 			}
 		}
