@@ -87,6 +87,7 @@ void update_spi_errors(uint8_t spi_errors[N_OF_ADBMS]) {
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		bat_pack.spi_error_counters[ic] += spi_errors[ic];
 		if (bat_pack.spi_error_counters[ic] > SPI_ERROR_LIMIT) {
+			bat_pack.status |= SPI_FAULT;
 			bat_pack.spi_fault_addresses |= 1u << ic;
 		}
 	}
