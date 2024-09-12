@@ -93,7 +93,7 @@ void update_spi_errors(uint8_t spi_errors[N_OF_ADBMS]) {
 	}
 }
 
-void get_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+void update_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	int16_t cell_voltages[N_OF_ADBMS][CELLS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
@@ -113,7 +113,7 @@ void get_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	}
 }
 
-void get_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	int16_t cell_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
@@ -131,4 +131,107 @@ void get_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 			}
 		}
 	}
+}
+
+void process_voltages() {
+	double max_voltage = -4; // Smallest voltage that can be read by ADC is -3.4152 V
+	int16_t max_voltage_raw;
+	double min_voltage = 7; // Largest voltage that can be read by ADC is 6.41505 V
+	int16_t min_voltage_raw;
+	double total_voltage = 0;
+
+	// Check each cell
+	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+		for (uint8_t cell = 0; cell < CELLS_PER_SUBPACK; cell++) {
+			double voltage = get_voltage(subpack, cell);
+
+			if (max_voltage < voltage) {
+				max_voltage = voltage;
+				max_voltage_raw = get_voltage_raw(subpack, cell);
+			}
+			if (min_voltage > voltage) {
+				min_voltage = voltage;
+				min_voltage_raw = get_voltage_raw(subpack, cell);
+			}
+			total_voltage += voltage;
+
+			if (voltage > OVER_VOLTAGE) {
+				bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT]++;
+				if (bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT] > ERROR_VOLTAGE_LIMIT) {
+					bat_pack.status |= CELL_VOLT_OVER;
+				}
+			}
+			else if (voltage < UNDER_VOLTAGE) {
+				bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT]++;
+				if (bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT] > ERROR_VOLTAGE_LIMIT) {
+					bat_pack.status |= CELL_VOLT_UNDER;
+				}
+			}
+			else {
+				bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT] = 0;
+				bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT] = 0;
+			}
+		}
+	}
+
+	bat_pack.HI_voltage_raw = max_voltage_raw;
+	bat_pack.LO_voltage_raw = min_voltage_raw;
+	bat_pack.LO_voltage = min_voltage;
+	bat_pack.total_voltage = total_voltage;
+	bat_pack.total_voltage_raw = (total_voltage - (1.5 * N_OF_CELL)) / (0.00015 * N_OF_CELL);
+}
+
+void process_temps() {
+	double avg_temp_c = 0;
+	double max_temp_c = -TEMP_IGNORE_LIMIT;
+	int16_t max_temp_raw;
+	double min_temp_c = TEMP_IGNORE_LIMIT;
+	uint8_t num_bad_temp = 0;
+
+	// Check each cell temp
+	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+		for (uint8_t temp = 0; temp < CELL_TEMPS_PER_SUBPACK; temp++) {
+			double temp_c = get_cell_temp(subpack, temp);
+
+			if (temp_c < TEMP_IGNORE_LIMIT) {
+				if (max_temp_c < temp_c) {
+					max_temp_c = temp_c;
+					max_temp_raw = get_cell_temp_raw(subpack, temp);
+				}
+				if (temp_c != 0) {
+					if (min_temp_c > temp_c) min_temp_c = temp_c;
+					avg_temp_c += temp_c;
+				}
+				else {
+					num_bad_temp++;
+				}
+
+				if (temp_c > OVER_TEMP) {
+					bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[OVERTEMP]++;
+					if (bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[OVERTEMP] > ERROR_TEMPERATURE_LIMIT) {
+						bat_pack.status |= PACK_TEMP_OVER;
+					}
+				}
+				else if (temp_c < UNDER_TEMP) {
+					bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP]++;
+					if (bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP] > ERROR_TEMPERATURE_LIMIT) {
+						bat_pack.status |= PACK_TEMP_UNDER;
+					}
+				}
+				else {
+					bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[OVERTEMP] = 0;
+					bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP] = 0;
+				}
+			}
+			else {
+				num_bad_temp++;
+			}
+		}
+	}
+	avg_temp_c /= N_OF_TEMP_CELL - num_bad_temp;
+
+	bat_pack.AVG_temp_c = avg_temp_c;
+	bat_pack.HI_temp_raw = max_temp_raw;
+	bat_pack.HI_temp_c = max_temp_c;
+	bat_pack.LO_temp_c = min_temp_c;
 }

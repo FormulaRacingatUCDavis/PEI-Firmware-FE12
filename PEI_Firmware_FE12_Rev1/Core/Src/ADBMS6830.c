@@ -412,7 +412,7 @@ void ADBMS6830_rdfc_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI han
 {
 	uint8_t cmd[2];
 	cmd[0] = 0x00;
-	cmd[1] = 0x12 + (uint8_t)reg;
+	cmd[1] = 0x12 + reg;
 
 	uint8_t num_tries = 0;
 	uint8_t try_again = 0;
@@ -447,7 +447,7 @@ void ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr,                   // Pointe
 
 	for (uint8_t reg = 0; reg < 4; reg++) {
 		uint8_t data[N_OF_ADBMS][6];
-		ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_errors);
+		ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
 
 		// Parse voltages and package them into 2D array
 		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
@@ -482,7 +482,7 @@ void ADBMS6830_rdaux_reg(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI ha
 {
 	uint8_t cmd[2];
 	cmd[0] = 0x00;
-	cmd[1] = 0x19 + (uint8_t)reg;
+	cmd[1] = 0x19 + reg;
 
 	uint8_t num_tries = 0;
 	uint8_t try_again = 0;
@@ -522,11 +522,11 @@ void ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr,   // Pointer to the SPI ha
 
 	// Check if pin is a GPIO pin
 	if (pin < VREF2) {
-		uint8_t reg = (uint8_t)pin / 3;
+		uint8_t reg = pin / 3;
 		cmd[1] = 0x19 + reg;
 
 		uint8_t offset = reg * 3;
-		lsb_idx = ((uint8_t)pin - offset) * 2;
+		lsb_idx = (pin - offset) * 2;
 	}
 	else if ((pin == VREF2) || (pin == ITEMP) || (pin == RESERVED)) {
 		cmd[1] = 0x30;
@@ -586,7 +586,7 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr,             
 
 	for (uint8_t reg = 0; reg < 3; reg++) {
 		uint8_t data[N_OF_ADBMS][6];
-		ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, (RegGroup_t)reg, data, spi_errors);
+		ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
 
 		// Parse voltages and package them into 2D array
 		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {

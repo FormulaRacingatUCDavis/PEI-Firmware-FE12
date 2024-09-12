@@ -38,30 +38,30 @@
 #define MISMATCH 0x40
 #define SPI_FAULT 0x80
 
+// Cell Error Macros
+#define OVERVOLT 0
+#define UNDERVOLT 1
+#define OPEN_WIRE 2
+#define RD_FAIL 3
+
+// Temp Error Macros
+#define OVERTEMP 0
+#define UNDERTEMP 1
+
 typedef enum {
 	BMS_FAULT, BMS_NORMAL
 } BMS_MODE_t;
 
-typedef enum {
-	NORMAL, OVERVOLT, UNDERVOLT, OPEN_WIRE, RD_FAIL
-} Cell_ErrorType_t;
-
-typedef enum {
-	NORMAL, OVERTEMP, UNDERTEMP
-} Temp_ErrorType_t;
-
 typedef struct {
 	int16_t voltage_raw;
 	double voltage;
-	uint8_t bad_counter;
-	Cell_ErrorType_t bad_type;
+	uint8_t bad_counters[4];
 } BAT_CELL_t;
 
 typedef struct {
 	int16_t temp_raw;
 	double temp_c;
-	uint8_t bad_counter;
-	Temp_ErrorType_t bad_type;
+	uint8_t bad_counters[2];
 } BAT_TEMP_t;
 
 typedef struct {
@@ -71,16 +71,26 @@ typedef struct {
 
 typedef struct {
 	BAT_SUBPACK_t subpacks[N_OF_SUBPACK];
+
 	int16_t total_voltage_raw;
 	double total_voltage;
+	int16_t HI_voltage_raw;
+	int16_t LO_voltage_raw;
 	double LO_voltage;
+
 	uint16_t current_ref_raw;
 	uint16_t current_raw;
 	double current;
+
+	uint8_t AVG_temp_c;
 	int16_t HI_temp_raw;
 	uint8_t HI_temp_c;
-	uint8_t SOC_percent;
+	uint8_t LO_temp_c;
+
+	double SOC_percent;
+
 	uint8_t status;
+
 	uint16_t spi_fault_addresses; // Stores the SPI fault flags for all ICs in a bit string
 	uint8_t spi_error_counters[N_OF_ADBMS]; // Stores the number of SPI communication errors for each IC
 } BAT_PACK_t;
@@ -95,14 +105,14 @@ void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw);
 double get_cell_temp(uint8_t subpack_num, uint8_t temp_num);
 int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num);
 
-void get_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
-void get_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void update_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
 void cell_redundancy_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void cell_open_wire_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
-void check_voltages();
-void check_temps();
+void process_voltages();
+void process_temps();
 
 void disable_cell_balancing(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void balance_cells(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
