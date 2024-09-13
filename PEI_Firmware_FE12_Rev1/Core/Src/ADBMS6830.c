@@ -275,17 +275,12 @@ void ADBMS6830_set_Aux_ADC(uint8_t OW, uint8_t PUP, uint8_t CH) {
 	ADAX[1] = 0x10;
 	ADAX[1] += PUP << 7;
 	ADAX[1] += (CH >> 4) << 6;
-	ADAX[1] +=  CH & 0x0F;
+	ADAX[1] += CH & 0x0F;
 }
 
-void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr,
-							 TIM_HandleTypeDef* htim_ptr,
-							 uint8_t discharge_enable,
-							 uint8_t ic_num,
-							 uint8_t cell_num)
-{
+void ADBMS6830_set_discharge(uint8_t ic_num, uint8_t cell_num) {
 	uint8_t reg_idx;
-	uint8_t config_val = discharge_enable ? 0b1001 : 0b0000; // Set to 60% duty cycle if enabling discharge
+	uint8_t config_val = 0b1001; // Set to 60% duty cycle
 	cell_num++; // Cell numbering in PWM register group is 1-based
 	if ((cell_num % 2) == 0) config_val <<= 4;
 
@@ -294,6 +289,7 @@ void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr,
 
 		if ((cell_num % 2) == 0) config_val += LO4(tx_wrpwma[ic_num][reg_idx]);
 		else config_val += HI4(tx_wrpwma[ic_num][reg_idx]) << 4;
+
 		tx_wrpwma[ic_num][reg_idx] = config_val;
 	}
 	else {
@@ -301,6 +297,7 @@ void ADBMS6830_set_discharge(SPI_HandleTypeDef* hspi_ptr,
 
 		if ((cell_num % 2) == 0) config_val += LO4(tx_wrpwmb[ic_num][reg_idx]);
 		else config_val += HI4(tx_wrpwmb[ic_num][reg_idx]) << 4;
+
 		tx_wrpwmb[ic_num][reg_idx] = config_val;
 	}
 }

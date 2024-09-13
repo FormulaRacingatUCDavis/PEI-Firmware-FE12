@@ -235,3 +235,28 @@ void process_temps() {
 	bat_pack.HI_temp_c = max_temp_c;
 	bat_pack.LO_temp_c = min_temp_c;
 }
+
+// Make sure no cells will discharge
+void disable_cell_balancing(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	ADBMS6830_reset_discharge();
+	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
+}
+
+// Update ICs to discharge cells that are too far above the lowest voltage in the pack
+void balance_cells(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	double target_voltage = bat_pack.LO_voltage;
+
+	ADBMS6830_reset_discharge(); // clear previous discharges
+
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		for (uint8_t cell = 0; cell < CELLS_PER_ADBMS; cell++) {
+			double voltage = get_voltage(ic / IC_PER_SUBPACK,
+										 ((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell
+										 );
+			double difference = voltage - target_voltage;
+			if (difference > BALANCE_THRESHOLD) ADBMS6830_set_discharge(ic, cell); // discharge cell
+		}
+	}
+
+	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
+}
