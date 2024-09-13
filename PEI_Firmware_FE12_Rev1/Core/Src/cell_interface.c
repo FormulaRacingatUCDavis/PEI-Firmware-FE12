@@ -117,6 +117,9 @@ void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	int16_t cell_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
+	ADBMS6830_set_Aux_ADC(0, 0, 0);
+	ADBMS6830_adax(hspi_ptr, htim_ptr); // run ADC conversion
+
 	ADBMS6830_rdaux_raw_temp_voltages(hspi_ptr, htim_ptr, cell_temps, spi_errors);
 	update_spi_errors(spi_errors);
 
