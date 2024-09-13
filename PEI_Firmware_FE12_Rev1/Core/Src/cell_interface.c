@@ -263,3 +263,34 @@ void balance_cells(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 
 	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 }
+
+uint8_t get_max_fault_ic_addr() {
+	uint8_t max_faults = bat_pack.spi_error_counters[0];
+	uint8_t max_fault_addr = 0;
+
+	for (uint8_t ic = 1; ic < N_OF_ADBMS; ic++) {
+		uint8_t num_faults = bat_pack.spi_error_counters[ic];
+
+		if (num_faults > max_faults) {
+			max_faults = num_faults;
+			max_fault_addr = ic;
+		}
+	}
+
+	return max_fault_addr;
+}
+
+BMS_MODE_t bat_health_check() {
+	if ((bat_pack.status & PACK_TEMP_OVER) ||
+		(bat_pack.status & PACK_TEMP_UNDER) ||
+		(bat_pack.status & FUSE_BLOWN) ||
+		(bat_pack.status & MISMATCH) ||
+		(bat_pack.status & CELL_VOLT_OVER) ||
+		(bat_pack.status & CELL_VOLT_UNDER) ||
+		(bat_pack.status & SPI_FAULT)
+		) {
+		return BMS_FAULT;
+	}
+
+	return BMS_NORMAL;
+}
