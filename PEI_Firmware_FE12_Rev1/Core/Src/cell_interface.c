@@ -20,13 +20,19 @@ void pack_init() {
 		for (uint8_t cell = 0; cell < CELLS_PER_SUBPACK; cell++) {
 			bat_pack.subpacks[subpack].cells[cell].voltage_raw = 0;
 			bat_pack.subpacks[subpack].cells[cell].voltage = 0;
-			bat_pack.subpacks[subpack].cells[cell].bad_counter = 0;
+
+			for (uint8_t i = 0; i < 4; i++) {
+				bat_pack.subpacks[subpack].cells[cell].bad_counters[i] = 0;
+			}
 		}
 
-		for (uint8_t temp = 0; cell < CELL_TEMPS_PER_SUBPACK; temp++) {
+		for (uint8_t temp = 0; temp < CELL_TEMPS_PER_SUBPACK; temp++) {
 			bat_pack.subpacks[subpack].cell_temps[temp].temp_raw = 0;
 			bat_pack.subpacks[subpack].cell_temps[temp].temp_c = 0;
-			bat_pack.subpacks[subpack].cell_temps[temp].bad_counter = 0;
+
+			for (uint8_t i = 0; i < 2; i++) {
+				bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[i] = 0;
+			}
 		}
 	}
 

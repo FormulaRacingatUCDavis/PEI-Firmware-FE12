@@ -176,7 +176,7 @@ typedef enum {
 void ADBMS6830_initialize(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
 void ADBMS6830_set_C_ADC(uint8_t RD, uint8_t CONT, uint8_t DCP, uint8_t RSTF, uint8_t OW);
-void ADBMS6830_set_S_ADC(uint8_t CONT, uint8_t DCP, uint8_t OW);
+void ADBMS6830_set_S_ADC(uint8_t CONT, uint8_t DCP, uint8_t RSTF, uint8_t OW);
 void ADBMS6830_set_Aux_ADC(uint8_t OW, uint8_t PUP, uint8_t CH);
 
 void ADBMS6830_set_discharge(uint8_t ic_num, uint8_t cell_num);

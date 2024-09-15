@@ -65,12 +65,12 @@ uint16_t cmd_pec_calc(uint8_t cmd[2]) {
  @param[in] SPI_HandleTypeDef* hspi_ptr pointer to the SPI handle
  @param[in] TIM_HandleTypeDef* htim_ptr pointer to a timer handle
  @param[in] uint8_t cmd[2] the command array to be written on the SPI port (2 bytes)
- @param[in] uint8_t** data the 2D array storing the data arrays to be written on the SPI port
+ @param[in] uint8_t* data[N_OF_ADBMS][6] the 2D array storing the data arrays to be written on the SPI port
 */
 void spi_write(SPI_HandleTypeDef* hspi_ptr, // Pointer to the SPI handle
 			   TIM_HandleTypeDef* htim_ptr, // Pointer to a timer handle
 			   uint8_t cmd[2],              // Array of command bytes to be written on the SPI port
-			   uint8_t** data               // 2D array storing data bytes for each IC (can be set to NULL if not a write command)
+			   uint8_t data[N_OF_ADBMS][6]  // 2D array storing data bytes for each IC (can be set to NULL if not a write command)
 			   )
 {
 	// Data prep (putting everything into a single array + PEC calculations)
@@ -250,6 +250,7 @@ void ADBMS6830_set_C_ADC(uint8_t RD, uint8_t CONT, uint8_t DCP, uint8_t RSTF, ui
 
  @param[in] uint8_t CONT Whether or not the ADC should run continuously
  @param[in] uint8_t DCP Whether or not PWM discharge is permitted during ADC conversion
+ @param[in] uint8_t RSTF Whether or not to reset the IIR filter
  @param[in] uint8_t OW Determines open wire detection mode
 */
 void ADBMS6830_set_S_ADC(uint8_t CONT, uint8_t DCP, uint8_t RSTF, uint8_t OW) {
@@ -287,18 +288,18 @@ void ADBMS6830_set_discharge(uint8_t ic_num, uint8_t cell_num) {
 	if (cell_num < 13) {
 		reg_idx = (cell_num - 1) / 2;
 
-		if ((cell_num % 2) == 0) config_val += LO4(tx_wrpwma[ic_num][reg_idx]);
-		else config_val += HI4(tx_wrpwma[ic_num][reg_idx]) << 4;
+		if ((cell_num % 2) == 0) config_val += LO4(tx_pwma[ic_num][reg_idx]);
+		else config_val += HI4(tx_pwma[ic_num][reg_idx]) << 4;
 
-		tx_wrpwma[ic_num][reg_idx] = config_val;
+		tx_pwma[ic_num][reg_idx] = config_val;
 	}
 	else {
 		reg_idx = (cell_num - 13) / 2;
 
-		if ((cell_num % 2) == 0) config_val += LO4(tx_wrpwmb[ic_num][reg_idx]);
-		else config_val += HI4(tx_wrpwmb[ic_num][reg_idx]) << 4;
+		if ((cell_num % 2) == 0) config_val += LO4(tx_pwmb[ic_num][reg_idx]);
+		else config_val += HI4(tx_pwmb[ic_num][reg_idx]) << 4;
 
-		tx_wrpwmb[ic_num][reg_idx] = config_val;
+		tx_pwmb[ic_num][reg_idx] = config_val;
 	}
 }
 
@@ -329,7 +330,7 @@ void ADBMS6830_wakeup(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) 
 	uint8_t pec_mismatches[N_OF_ADBMS];
 
 	spi_write_read(hspi_ptr, htim_ptr, cmd, rx_data, pec_mismatches);
-	delay_us(WAKE_UP_DELAY_US);
+	delay_us(htim_ptr, WAKE_UP_DELAY_US);
 }
 
 // Write to configuration register group A
