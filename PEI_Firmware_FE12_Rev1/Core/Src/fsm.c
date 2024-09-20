@@ -78,6 +78,10 @@ uint8_t precharge_ready() {
 			(mc_vsm_state == VSM_WAIT);
 }
 
+uint8_t precharge_complete() {
+	return 0;
+}
+
 // TODO: Un-comment after merge with BMS branch
 //uint8_t precharge_complete() {
 //    uint16_t threshold = (uint16_t)(((float)(bat_pack.voltage / 10)) * 0.9);

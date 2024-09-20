@@ -86,6 +86,10 @@ MC_DISCHARGE_STATE_t mc_discharge_state = DISCHARGE_DISABLED;
 uint32_t mc_post_faults = 0;
 uint32_t mc_run_faults = 0;
 
+// Charger parameters
+extern uint8_t charger_attached;
+extern uint8_t charge_control;
+
 // Tick counters
 uint32_t ticks_since_vcu_message = 0;
 uint32_t ticks_since_mc_message = 0;
@@ -243,7 +247,7 @@ int main(void)
 
 	  HAL_GPIO_TogglePin(Heartbeat_GPIO_Port, Heartbeat_Pin);
 
-	  if (charger_attached) can_send_CHARGER();
+	  if (charger_attached) can_send_Charger();
 
 	  HAL_IWDG_Refresh(&hiwdg);
 
@@ -456,7 +460,7 @@ static void MX_CAN1_Init(void)
   can1_filter.FilterIdLow = 0x0000;
   can1_filter.FilterMaskIdHigh = 0x766 << 5;
   can1_filter.FilterMaskIdLow = 0x0000;
-  if (HAL_CAN_ConfigFilter(&hcan1, can1_filter) != HAL_OK) {
+  if (HAL_CAN_ConfigFilter(&hcan1, &can1_filter) != HAL_OK) {
 	  Error_Handler();
   }
 
@@ -465,7 +469,7 @@ static void MX_CAN1_Init(void)
   can1_filter.FilterFIFOAssignment = CAN_FILTER_FIFO1;
   can1_filter.FilterIdHigh = 0x0A0 << 5;
   can1_filter.FilterMaskIdHigh = 0x0A0 << 5;
-  if (HAL_CAN_ConfigFilter(&hcan1, can1_filter) != HAL_OK) {
+  if (HAL_CAN_ConfigFilter(&hcan1, &can1_filter) != HAL_OK) {
 	  Error_Handler();
   }
 
@@ -522,12 +526,12 @@ static void MX_CAN2_Init(void)
   can2_filter.FilterBank = 18;
   can2_filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
   can2_filter.FilterMode = CAN_FILTERMODE_IDMASK;
-  can2_filter.FilterScale = CAN_FILTER_32BIT;
+  can2_filter.FilterScale = CAN_FILTERSCALE_32BIT;
   can2_filter.FilterIdHigh = 0x18FF;
   can2_filter.FilterIdLow = (0x50E5 & 0x1FFF) << 3;
   can2_filter.FilterMaskIdHigh = 0x18FF;
   can2_filter.FilterMaskIdLow = (0x50E5 & 0x1FFF) << 3;
-  if (HAL_CAN_ConfigFilter(&hcan2, can2_filter) != HAL_OK) {
+  if (HAL_CAN_ConfigFilter(&hcan2, &can2_filter) != HAL_OK) {
 	  Error_Handler();
   }
 

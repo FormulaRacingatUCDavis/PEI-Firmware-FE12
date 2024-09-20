@@ -57,7 +57,7 @@ void CAN_SendMsg(CAN_HandleTypeDef* hcan_ptr, CAN_TxHeaderTypeDef* tx_header_ptr
 	HAL_CAN_AddTxMessage(hcan_ptr, tx_header_ptr, tx_data, tx_mailbox_ptr);
 }
 
-void can_send_CHARGER() {
+void can_send_Charger() {
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	tx_header.IDE = CAN_ID_EXT;

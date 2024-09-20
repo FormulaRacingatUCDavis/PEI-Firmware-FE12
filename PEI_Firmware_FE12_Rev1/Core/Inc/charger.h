@@ -8,6 +8,8 @@
 #ifndef INC_CHARGER_H_
 #define INC_CHARGER_H_
 
+#include <stdint.h>
+
 #define CHARGER_MAX_VOLTAGE 5040 // 504 V
 
 #define CHARGE_STOP 1
