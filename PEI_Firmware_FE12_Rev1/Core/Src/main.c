@@ -57,7 +57,7 @@ IWDG_HandleTypeDef hiwdg;
 
 SPI_HandleTypeDef hspi5;
 
-TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart3;
 
@@ -107,7 +107,7 @@ static void MX_ADC3_Init(void);
 static void MX_SPI5_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_CAN2_Init(void);
-static void MX_TIM6_Init(void);
+static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
 void init();
 double raw_to_amps(uint16_t current_raw);
@@ -160,10 +160,10 @@ int main(void)
   MX_SPI5_Init();
   MX_IWDG_Init();
   MX_CAN2_Init();
-  MX_TIM6_Init();
+  MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start(&htim6);
-  LCD_Init(&htim6);
+  HAL_TIM_Base_Start(&htim10);
+  LCD_Init(&htim10);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -252,7 +252,7 @@ int main(void)
 	  HAL_IWDG_Refresh(&hiwdg);
 
 	  HAL_Delay(100);
-	  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -616,40 +616,33 @@ static void MX_SPI5_Init(void)
 }
 
 /**
-  * @brief TIM6 Initialization Function
+  * @brief TIM10 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM6_Init(void)
+static void MX_TIM10_Init(void)
 {
 
-  /* USER CODE BEGIN TIM6_Init 0 */
+  /* USER CODE BEGIN TIM10_Init 0 */
 
-  /* USER CODE END TIM6_Init 0 */
+  /* USER CODE END TIM10_Init 0 */
 
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  /* USER CODE BEGIN TIM10_Init 1 */
 
-  /* USER CODE BEGIN TIM6_Init 1 */
-
-  /* USER CODE END TIM6_Init 1 */
-  htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 27-1;
-  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 65535;
-  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  /* USER CODE END TIM10_Init 1 */
+  htim10.Instance = TIM10;
+  htim10.Init.Prescaler = 27-1;
+  htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim10.Init.Period = 65535;
+  htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM6_Init 2 */
+  /* USER CODE BEGIN TIM10_Init 2 */
 
-  /* USER CODE END TIM6_Init 2 */
+  /* USER CODE END TIM10_Init 2 */
 
 }
 
