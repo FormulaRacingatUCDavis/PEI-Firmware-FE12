@@ -8,13 +8,13 @@
 
 #include "main.h"
 #include "fsm.h"
+#include "can_manager.h"
 
 extern uint8_t pei_status;
 
 // BMS variables
-extern BAT_PACK_t bat_pack;
-extern uint16_t bms_status;
-extern uint8_t bms_soc;
+// TODO: Un-comment after merge with BMS branch
+//extern BAT_PACK_t bat_pack;
 
 // Motor controller variables
 extern int16_t mc_voltage;
@@ -78,10 +78,11 @@ uint8_t precharge_ready() {
 			(mc_vsm_state == VSM_WAIT);
 }
 
-uint8_t precharge_complete() {
-    uint16_t threshold = (uint16_t)(((float)(bat_pack.voltage / 10)) * 0.9);
-    return mc_voltage > threshold;
-}
+// TODO: Un-comment after merge with BMS branch
+//uint8_t precharge_complete() {
+//    uint16_t threshold = (uint16_t)(((float)(bat_pack.voltage / 10)) * 0.9);
+//    return mc_voltage > threshold;
+//}
 
 void add_status(uint8_t status) {
     pei_status |= status;

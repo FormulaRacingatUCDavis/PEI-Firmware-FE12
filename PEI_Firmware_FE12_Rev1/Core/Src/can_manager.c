@@ -7,7 +7,9 @@
 
 
 #include "can_manager.h"
+#include "charger.h"
 #include "fsm.h"
+#include "word_processing.h"
 
 extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef hcan2;
@@ -27,6 +29,7 @@ extern uint32_t ticks_since_mc_message;
 extern uint8_t charger_attached;
 extern uint8_t charger_status;
 extern uint16_t charger_max_current;
+extern uint8_t charge_control;
 extern uint32_t ticks_since_charger_message;
 
 // TODO: Make external declaration of pack struct
@@ -51,12 +54,10 @@ void set_tx_header_defaults(CAN_TxHeaderTypeDef* tx_header_ptr) {
 }
 
 void CAN_SendMsg(CAN_HandleTypeDef* hcan_ptr, CAN_TxHeaderTypeDef* tx_header_ptr, uint8_t tx_data[], uint32_t* tx_mailbox_ptr) {
-	if (HAL_CAN_AddTxMessage(hcan_ptr, tx_header_ptr, tx_data, tx_mailbox_ptr) != HAL_OK) {
-		Error_Handler();
-	}
+	HAL_CAN_AddTxMessage(hcan_ptr, tx_header_ptr, tx_data, tx_mailbox_ptr);
 }
 
-void can_send_CHARGER(uint8_t charge_start) {
+void can_send_CHARGER() {
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	tx_header.IDE = CAN_ID_EXT;
@@ -69,53 +70,48 @@ void can_send_CHARGER(uint8_t charge_start) {
 	tx_data[1] = LO8(CHARGER_MAX_VOLTAGE);
 	tx_data[2] = HI8(charger_max_current);
 	tx_data[3] = LO8(charger_max_current);
-	tx_data[4] = charge_start;
+	tx_data[4] = charge_control;
 
 	CAN_SendMsg(&hcan2, &tx_header, tx_data, &PEI_CHARGER_TX_MAILBOX);
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
-	if (HAL_CAN_GetRxMessage(hcan_ptr, CAN_RX_FIFO0, &rx0_header, CAN_RX0_BUFFER) != HAL_OK) {
-		Error_Handler();
+	HAL_CAN_GetRxMessage(hcan_ptr, CAN_RX_FIFO0, &rx0_header, CAN_RX0_BUFFER);
+
+	if (hcan_ptr == &hcan1) {
+		vcu_tickstart = HAL_GetTick();
+		ticks_since_vcu_message = 0;
+		vcu_attached = 1;
+
+		hv_requested = CAN_RX0_BUFFER[1];
+		vcu_state = CAN_RX0_BUFFER[5];
+
+		// TODO: Un-comment after merge with BMS branch
+		//bat_pack.status &= ~CHARGEMODE;
 	}
-	else {
-		if (hcan_ptr == &hcan1) {
-			vcu_tickstart = HAL_GetTick();
-			ticks_since_vcu_message = 0;
-			vcu_attached = 1;
+	else if (hcan_ptr == &hcan2) {
+		charger_tickstart = HAL_GetTick();
+		ticks_since_charger_message = 0;
+		charger_attached = 1;
 
-			hv_requested = CAN_RX0_BUFFER[1];
-			vcu_state = CAN_RX0_BUFFER[5];
+		// TODO: Un-comment after merge with BMS branch
+		//bat_pack.status |= CHARGEMODE;
 
-			// TODO: Un-comment after merge with BMS branch
-			//bat_pack.status &= ~CHARGEMODE;
+		charger_status = CAN_RX1_BUFFER[4];
+		if ((charger_status & 0b1111) == 0) { // no faults, charger active
+			vcu_state = CHARGING;
 		}
-		else if (hcan_ptr == &hcan2) {
-			charger_tickstart = HAL_GetTick();
-			ticks_since_charger_message = 0;
-			charger_attached = 1;
-
-			// TODO: Un-comment after merge with BMS branch
-			//bat_pack.status |= CHARGEMODE;
-
-			charger_status = CAN_RX1_BUFFER[4];
-			if ((charger_status & 0b1111) == 0) { // no faults, charger active
-				vcu_state = CHARGING;
-			}
-			else if ((charger_status & 0b1011) == 0) { // no faults, charger inactive
-				vcu_state = LV;
-			}
-			else {
-				// Charger faults, handled in fsm.c
-			}
+		else if ((charger_status & 0b1011) == 0) { // no faults, charger inactive
+			vcu_state = LV;
+		}
+		else {
+			// Charger faults, handled in fsm.c
 		}
 	}
 }
 
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
-	if (HAL_CAN_GetRxMessage(hcan_ptr, CAN_RX_FIFO1, &rx1_header, CAN_RX1_BUFFER) != HAL_OK) {
-		Error_Handler();
-	}
+	HAL_CAN_GetRxMessage(hcan_ptr, CAN_RX_FIFO1, &rx1_header, CAN_RX1_BUFFER);
 
 	uint32_t id = rx1_header.StdId;
 	if (id == 0x0A7) {
