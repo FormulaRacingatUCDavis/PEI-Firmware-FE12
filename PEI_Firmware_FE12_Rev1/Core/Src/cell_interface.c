@@ -143,6 +143,36 @@ void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	}
 }
 
+void cell_redundancy_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	uint8_t mismatch_flags[N_OF_ADBMS][CELLS_PER_ADBMS];
+	uint8_t spi_errors[N_OF_ADBMS];
+
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	ADBMS6830_set_S_ADC(1, 0, 0, 0);
+	ADBMS6830_adsv(hspi_ptr, htim_ptr);
+	HAL_Delay(8);
+
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	ADBMS6830_rdstatc_mismatch(hspi_ptr, htim_ptr, mismatch_flags, spi_errors);
+	update_spi_errors(spi_errors);
+
+	// Check each cell
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		// Update bat_pack if no SPI error
+		if (!spi_errors[ic]) {
+			for (uint8_t cell = 0; cell < CELLS_PER_ADBMS; cell++) {
+				uint8_t subpack = ic / IC_PER_SUBPACK;
+				uint8_t subpack_cell_num = ((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell;
+
+				bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] += mismatch_flags[ic][cell];
+				if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] > ERROR_VOLTAGE_LIMIT) {
+					bat_pack.status |= MISMATCH;
+				}
+			}
+		}
+	}
+}
+
 void process_voltages() {
 	double max_voltage = -4; // Smallest voltage that can be read by ADC is -3.4152 V
 	int16_t max_voltage_raw;
@@ -176,10 +206,6 @@ void process_voltages() {
 				if (bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT] > ERROR_VOLTAGE_LIMIT) {
 					bat_pack.status |= CELL_VOLT_UNDER;
 				}
-			}
-			else {
-				bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT] = 0;
-				bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT] = 0;
 			}
 		}
 	}
