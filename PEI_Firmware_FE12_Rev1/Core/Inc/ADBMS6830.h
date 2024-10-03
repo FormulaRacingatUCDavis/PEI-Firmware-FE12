@@ -13,7 +13,7 @@
 
 #include "data.h"
 
-#define WAKE_UP_DELAY_US 3653 // number of microseconds to wait after sending wake up signal
+#define WAKE_UP_DELAY_US 3600 // number of microseconds to wait after sending wake up signal
 
 static const unsigned int crc10Table[256] = {0x0, 0x8f, 0x11e, 0x191, 0x23c, 0x2b3, 0x322, 0x3ad, 0xf7, 0x78, 0x1e9, 0x166,       // pre-computed CRC10 table
 0x2cb, 0x244, 0x3d5, 0x35a, 0x1ee, 0x161, 0xf0, 0x7f, 0x3d2, 0x35d, 0x2cc, 0x243, 0x119,
@@ -142,7 +142,7 @@ typedef enum {
 } RegGroup_t;
 
 // Default values for CFGA registers
-#define CFGA0 0x81 // REFON enabled (same as last year), C-ADC vs S-ADC comparison voltage threshold set to its default (8.1 mV)
+#define CFGA0 0x81 // REFON enabled, C-ADC vs S-ADC comparison voltage threshold set to its default (8.1 mV)
 #define CFGA1 0x00
 #define CFGA2 0x80 // Soak time enabled for Aux GPIO
 #define CFGA3 0xFF // Pull-down resistor disabled for Aux GPIO 1-8
@@ -153,7 +153,7 @@ typedef enum {
 #define CFGB0 0x00
 #define CFGB1 0x00
 #define CFGB2 0x00
-#define CFGB3 0x82 // DTMEN enabled, discharge timer set to 1 minute
+#define CFGB3 0x01 // Discharge timer set to 1 minute
 #define CFGB4 0x00
 #define CFGB5 0x00
 
