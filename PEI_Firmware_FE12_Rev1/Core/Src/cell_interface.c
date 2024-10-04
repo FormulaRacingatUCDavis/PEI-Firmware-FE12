@@ -124,7 +124,7 @@ void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	uint8_t spi_errors[N_OF_ADBMS];
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	ADBMS6830_set_Aux_ADC(0, 0, 0);
+	ADBMS6830_set_Aux_ADC(0, 0, AUX_CH_ALL);
 	ADBMS6830_adax(hspi_ptr, htim_ptr); // run ADC conversion
 
 	ADBMS6830_rdaux_raw_temp_voltages(hspi_ptr, htim_ptr, cell_temps, spi_errors);
@@ -143,30 +143,72 @@ void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	}
 }
 
-void cell_redundancy_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+/*
+ * Checks for two types of cell disconnects:
+ *
+ * Disconnect on the node PCB itself, detected through a mismatch between
+ * S-ADC and C-ADC measurements (RD_FAIL/MISMATCH)
+ *
+ * Broken connection between cell and the node PCB, detected using the
+ * ADBMS6830's open wire detection functionality (FUSE_BLOWN/OPEN_WIRE)
+ *
+ * See Cell Discharge With Cell Measurements and Cell Diagnostics section of datasheet
+ * for implementation details
+ */
+void cell_disconnect_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+	int16_t baseline_voltages[N_OF_ADBMS][CELLS_PER_ADBMS]; // voltages from S-ADCs with open-wire switches closed
+	int16_t even_open_wire_voltages[N_OF_ADBMS][CELLS_PER_ADBMS]; // voltages from S-ADCs with even-channel open-wire switches open
+	int16_t odd_open_wire_voltages[N_OF_ADBMS][CELLS_PER_ADBMS]; // voltages from S-ADCS with odd-channel open-wire switches open
 	uint8_t mismatch_flags[N_OF_ADBMS][CELLS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	ADBMS6830_set_S_ADC(1, 0, 0, 0);
+	ADBMS6830_set_S_ADC(1, 0, 0, CELL_OW_DISABLED); // DCP = 0, CONT = 1, OW = 0
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 	HAL_Delay(8);
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	ADBMS6830_rdstatc_mismatch(hspi_ptr, htim_ptr, mismatch_flags, spi_errors);
-	update_spi_errors(spi_errors);
+
+	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, baseline_voltages, spi_errors);
+
+	ADBMS6830_set_S_ADC(0, 0, 0, CELL_OW_CH_EVEN); // DCP = 0, CONT = 0, OW = 1
+	ADBMS6830_adsv(hspi_ptr, htim_ptr);
+	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, even_open_wire_voltages, spi_errors);
+
+	ADBMS6830_set_S_ADC(0, 0, 0, CELL_OW_CH_ODD); // DCP = 0, CONT = 0, OW = 2
+	ADBMS6830_adsv(hspi_ptr, htim_ptr);
+	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, odd_open_wire_voltages, spi_errors);
 
 	// Check each cell
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		// Update bat_pack if no SPI error
 		if (!spi_errors[ic]) {
 			for (uint8_t cell = 0; cell < CELLS_PER_ADBMS; cell++) {
+				double open_wire_voltage;
+				double baseline_voltage = (baseline_voltages[ic][cell] * 0.00015) + 1.5;
 				uint8_t subpack = ic / IC_PER_SUBPACK;
 				uint8_t subpack_cell_num = ((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell;
+
+				if (((cell + 1) % 2) == 0) {
+					open_wire_voltage = (even_open_wire_voltages[ic][cell] * 0.00015) + 1.5;
+				}
+				else {
+					open_wire_voltage = (odd_open_wire_voltages[ic][cell] * 0.00015) + 1.5;
+				}
 
 				bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] += mismatch_flags[ic][cell];
 				if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] > ERROR_VOLTAGE_LIMIT) {
 					bat_pack.status |= MISMATCH;
+				}
+
+				double percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
+				if (percent_difference < 0) percent_difference = -percent_difference;
+				if (percent_difference > 0.1) {
+					bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]++;
+					if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN] > ERROR_VOLTAGE_LIMIT) {
+						bat_pack.status |= OPEN_WIRE;
+					}
 				}
 			}
 		}

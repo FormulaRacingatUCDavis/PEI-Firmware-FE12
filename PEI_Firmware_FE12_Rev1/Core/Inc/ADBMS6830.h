@@ -13,7 +13,7 @@
 
 #include "data.h"
 
-#define WAKE_UP_DELAY_US 3600 // number of microseconds to wait after sending wake up signal
+#define WAKE_UP_DELAY_US 10 * N_OF_ADBMS // number of microseconds to wait after sending wake up signal
 
 static const unsigned int crc10Table[256] = {0x0, 0x8f, 0x11e, 0x191, 0x23c, 0x2b3, 0x322, 0x3ad, 0xf7, 0x78, 0x1e9, 0x166,       // pre-computed CRC10 table
 0x2cb, 0x244, 0x3d5, 0x35a, 0x1ee, 0x161, 0xf0, 0x7f, 0x3d2, 0x35d, 0x2cc, 0x243, 0x119,
@@ -193,6 +193,7 @@ void ADBMS6830_adsv(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void ADBMS6830_adax(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
 void ADBMS6830_rdfc_all(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, int16_t voltages[N_OF_ADBMS][CELLS_PER_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
+void ADBMS6830_rdsv_all(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, int16_t s_voltages[N_OF_ADBMS][CELLS_PER_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
 void ADBMS6830_rdaux_pin(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, AuxPin_t pin, int16_t aux[N_OF_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
 void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, int16_t raw_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);
 void ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr, uint8_t mismatches[N_OF_ADBMS][CELLS_PER_ADBMS], uint8_t spi_errors[N_OF_ADBMS]);

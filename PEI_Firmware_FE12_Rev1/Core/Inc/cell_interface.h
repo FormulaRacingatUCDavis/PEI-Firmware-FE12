@@ -34,14 +34,14 @@
 #define PACK_TEMP_UNDER 0x04
 #define CELL_VOLT_OVER 0x08
 #define CELL_VOLT_UNDER 0x10
-#define FUSE_BLOWN 0x20
+#define OPEN_WIRE 0x20
 #define MISMATCH 0x40
 #define SPI_FAULT 0x80
 
 // Cell Error Macros
 #define OVERVOLT 0
 #define UNDERVOLT 1
-#define OPEN_WIRE 2
+#define FUSE_BLOWN 2
 #define RD_FAIL 3
 
 // Temp Error Macros
@@ -108,8 +108,7 @@ int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num);
 void update_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
-void cell_redundancy_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
-void cell_open_wire_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void cell_disconnect_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
 
 void process_voltages();
 void process_temps();
