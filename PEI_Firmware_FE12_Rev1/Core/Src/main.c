@@ -21,6 +21,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
+
+#include "fsm.h"
+#include "can_manager.h"
+#include "charger.h"
+#include "relays.h"
+#include "LCD.h"
 
 /* USER CODE END Includes */
 
@@ -50,12 +57,43 @@ IWDG_HandleTypeDef hiwdg;
 
 SPI_HandleTypeDef hspi5;
 
-TIM_HandleTypeDef htim1;
-TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
+// PEI parameters
+PEI_STATE_t pei_state = PEI_LV;
+uint8_t pei_status = NORMAL;
+int16_t current;
+int16_t currentOffset;
+uint8_t shutdown_flags = 0;
+
+// Relay parameters
+extern uint8_t relay_flags;
+
+// VCU parameters
+VCU_STATE_t vcu_state = LV;
+uint8_t hv_requested = 0;
+uint8_t vcu_attached = 0;
+
+// TODO: make external declaration of pack struct
+
+// MC parameters
+int16_t mc_voltage = 0;
+MC_VSM_STATE_t mc_vsm_state = VSM_START;
+MC_DISCHARGE_STATE_t mc_discharge_state = DISCHARGE_DISABLED;
+uint32_t mc_post_faults = 0;
+uint32_t mc_run_faults = 0;
+
+// Charger parameters
+extern uint8_t charger_attached;
+extern uint8_t charge_control;
+
+// Tick counters
+uint32_t ticks_since_vcu_message = 0;
+uint32_t ticks_since_mc_message = 0;
+uint32_t ticks_since_charger_message = 0;
 
 /* USER CODE END PV */
 
@@ -63,21 +101,27 @@ UART_HandleTypeDef huart3;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC2_Init(void);
-static void MX_TIM1_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_ADC3_Init(void);
 static void MX_SPI5_Init(void);
-static void MX_TIM2_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_CAN2_Init(void);
+static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
-
+void init();
+double raw_to_amps(uint16_t current_raw);
+void update_current();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+double raw_to_amps(uint16_t current_raw) {
+	double mVolts = ((double)current_raw / 4095) * 3.3 * 1000;
+	double current = ((mVolts * 7.4 / 4.7) - 2500) / 6.667;
 
+	return current;
+}
 /* USER CODE END 0 */
 
 /**
@@ -110,22 +154,104 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC2_Init();
-  MX_TIM1_Init();
   MX_CAN1_Init();
   MX_USART3_UART_Init();
   MX_ADC3_Init();
   MX_SPI5_Init();
-  MX_TIM2_Init();
   MX_IWDG_Init();
   MX_CAN2_Init();
+  MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_TIM_Base_Start(&htim10);
+  LCD_Init(&htim10);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  // BMS
+
+	  // TODO: Insert BMS state machine code after merge with BMS branch
+
+	  // -------------------- BMS ----------------------
+
+	  // PEI
+
+	  charge_control = CHARGE_STOP;
+	  shutdown_flags = 0;
+
+	  shutdown_flags = relay_flags & 0x07;
+	  if (!HAL_GPIO_ReadPin(IMD_Fault_GPIO_Port, IMD_Fault_Pin)) shutdown_flags |= (1 << 5);
+	  if (!HAL_GPIO_ReadPin(BMS_Fault_GPIO_Port, BMS_Fault_Pin)) shutdown_flags |= (1 << 4);
+	  if (HAL_GPIO_ReadPin(SDC_Final_GPIO_Port, SDC_Final_Pin)) shutdown_flags |= (1 << 3);
+
+	  // Interlock state machine
+
+	  update_status();
+
+	  if (!hv_allowed()) {
+		  pei_state = PEI_FAULT;
+	  }
+
+	  switch (pei_state) {
+		  case PEI_LV:
+			  clear_interlock(); // clears interlock, sends a message to open AIRs
+
+			  if (hv_request() && hv_allowed()) {
+				  if (vcu_attached && precharge_ready()) {
+					  pei_state = PEI_PRECHARGE;
+				  }
+				  else if (charger_attached) {
+					  pei_state = PEI_HV; // charger doesn't need precharge
+				  }
+			  }
+
+			  break;
+
+		  case PEI_PRECHARGE:
+			  start_precharge();
+
+			  if (precharge_complete()) {
+				  pei_state = PEI_HV;
+			  }
+
+			  if (!hv_request()) {
+				  pei_state = PEI_LV;
+			  }
+
+			  break;
+
+		  case PEI_HV:
+			  finish_precharge();
+			  charge_control = CHARGE_START;
+
+			  if (!hv_request()) {
+				  pei_state = PEI_LV;
+			  }
+
+			  break;
+
+		  default:
+			  clear_interlock();
+			  pei_state = PEI_FAULT;
+
+			  if (!hv_request() && hv_allowed()) {
+				  pei_state = PEI_LV;
+			  }
+	  }
+
+	  // -------------------- PEI ----------------------
+
+	  update_can_status();
+
+	  HAL_GPIO_TogglePin(Heartbeat_GPIO_Port, Heartbeat_Pin);
+
+	  if (charger_attached) can_send_Charger();
+
+	  HAL_IWDG_Refresh(&hiwdg);
+
+	  HAL_Delay(100);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -322,7 +448,41 @@ static void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
+  // Filter vehicle state messages into FIFO0
+  CAN_FilterTypeDef can1_filter;
+  can1_filter.FilterActivation = CAN_FILTER_ENABLE;
+  can1_filter.SlaveStartFilterBank = 18;
+  can1_filter.FilterBank = 0;
+  can1_filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+  can1_filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  can1_filter.FilterScale = CAN_FILTERSCALE_32BIT;
+  can1_filter.FilterIdHigh = 0x766 << 5;
+  can1_filter.FilterIdLow = 0x0000;
+  can1_filter.FilterMaskIdHigh = 0x766 << 5;
+  can1_filter.FilterMaskIdLow = 0x0000;
+  if (HAL_CAN_ConfigFilter(&hcan1, &can1_filter) != HAL_OK) {
+	  Error_Handler();
+  }
 
+  // Filter motor controller messages into FIFO1
+  can1_filter.FilterBank = 1;
+  can1_filter.FilterFIFOAssignment = CAN_FILTER_FIFO1;
+  can1_filter.FilterIdHigh = 0x0A0 << 5;
+  can1_filter.FilterMaskIdHigh = 0x0A0 << 5;
+  if (HAL_CAN_ConfigFilter(&hcan1, &can1_filter) != HAL_OK) {
+	  Error_Handler();
+  }
+
+  if (HAL_CAN_Start(&hcan1) != HAL_OK) {
+	  Error_Handler();
+  }
+
+  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+  	  Error_Handler();
+  }
+  if (HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO1_MSG_PENDING) != HAL_OK) {
+	  Error_Handler();
+  }
   /* USER CODE END CAN1_Init 2 */
 
 }
@@ -359,7 +519,29 @@ static void MX_CAN2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN2_Init 2 */
+  // Filter charger messages into FIFO0
+  CAN_FilterTypeDef can2_filter;
+  can2_filter.FilterActivation = CAN_FILTER_ENABLE;
+  can2_filter.SlaveStartFilterBank = 18;
+  can2_filter.FilterBank = 18;
+  can2_filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+  can2_filter.FilterMode = CAN_FILTERMODE_IDMASK;
+  can2_filter.FilterScale = CAN_FILTERSCALE_32BIT;
+  can2_filter.FilterIdHigh = 0x18FF;
+  can2_filter.FilterIdLow = (0x50E5 & 0x1FFF) << 3;
+  can2_filter.FilterMaskIdHigh = 0x18FF;
+  can2_filter.FilterMaskIdLow = (0x50E5 & 0x1FFF) << 3;
+  if (HAL_CAN_ConfigFilter(&hcan2, &can2_filter) != HAL_OK) {
+	  Error_Handler();
+  }
 
+  if (HAL_CAN_Start(&hcan2) != HAL_OK) {
+	  Error_Handler();
+  }
+
+  if (HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO0_MSG_PENDING) != HAL_OK) {
+	  Error_Handler();
+  }
   /* USER CODE END CAN2_Init 2 */
 
 }
@@ -434,94 +616,33 @@ static void MX_SPI5_Init(void)
 }
 
 /**
-  * @brief TIM1 Initialization Function
+  * @brief TIM10 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM1_Init(void)
+static void MX_TIM10_Init(void)
 {
 
-  /* USER CODE BEGIN TIM1_Init 0 */
+  /* USER CODE BEGIN TIM10_Init 0 */
 
-  /* USER CODE END TIM1_Init 0 */
+  /* USER CODE END TIM10_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  /* USER CODE BEGIN TIM10_Init 1 */
 
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 27-1;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  /* USER CODE END TIM10_Init 1 */
+  htim10.Instance = TIM10;
+  htim10.Init.Prescaler = 27-1;
+  htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim10.Init.Period = 65535;
+  htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
   {
     Error_Handler();
   }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
+  /* USER CODE BEGIN TIM10_Init 2 */
 
-  /* USER CODE END TIM1_Init 2 */
-
-}
-
-/**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 54000-1;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 99;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
+  /* USER CODE END TIM10_Init 2 */
 
 }
 

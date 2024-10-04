@@ -12,7 +12,7 @@
 #include "relays.h"
 #include "main.h"
 
-extern uint8_t relay_flags;
+uint8_t relay_flags;
 
 // Closes the precharge relay, opens the positive relay
 void start_precharge() {
