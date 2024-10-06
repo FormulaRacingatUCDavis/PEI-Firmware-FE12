@@ -124,7 +124,6 @@ void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	uint8_t spi_errors[N_OF_ADBMS];
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	ADBMS6830_set_Aux_ADC(0, 0, AUX_CH_ALL);
 	ADBMS6830_adax(hspi_ptr, htim_ptr); // run ADC conversion
 
 	ADBMS6830_rdaux_raw_temp_voltages(hspi_ptr, htim_ptr, cell_temps, spi_errors);
@@ -358,7 +357,7 @@ uint8_t get_max_fault_ic_addr() {
 BMS_MODE_t bat_health_check() {
 	if ((bat_pack.status & PACK_TEMP_OVER) ||
 		(bat_pack.status & PACK_TEMP_UNDER) ||
-		(bat_pack.status & FUSE_BLOWN) ||
+		(bat_pack.status & OPEN_WIRE) ||
 		(bat_pack.status & MISMATCH) ||
 		(bat_pack.status & CELL_VOLT_OVER) ||
 		(bat_pack.status & CELL_VOLT_UNDER) ||

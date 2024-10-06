@@ -7,6 +7,7 @@
 
 
 #include "can_manager.h"
+#include "cell_interface.h"
 #include "charger.h"
 #include "fsm.h"
 #include "word_processing.h"
@@ -32,7 +33,7 @@ extern uint16_t charger_max_current;
 extern uint8_t charge_control;
 extern uint32_t ticks_since_charger_message;
 
-// TODO: Make external declaration of pack struct
+extern BAT_PACK_t bat_pack;
 
 uint32_t vcu_tickstart = 0;
 uint32_t mc_tickstart = 0;
@@ -45,6 +46,7 @@ uint32_t PEI_CURRENT_TX_MAILBOX;
 uint32_t PEI_CHARGER_TX_MAILBOX;
 uint32_t BMS_STATUS_TX_MAILBOX;
 uint32_t BMS_DATA_TX_MAILBOX;
+
 uint8_t CAN_RX0_BUFFER[8];
 uint8_t CAN_RX1_BUFFER[8];
 
@@ -53,8 +55,21 @@ void set_tx_header_defaults(CAN_TxHeaderTypeDef* tx_header_ptr) {
 	tx_header_ptr->RTR = CAN_RTR_DATA;
 }
 
-void CAN_SendMsg(CAN_HandleTypeDef* hcan_ptr, CAN_TxHeaderTypeDef* tx_header_ptr, uint8_t tx_data[], uint32_t* tx_mailbox_ptr) {
-	HAL_CAN_AddTxMessage(hcan_ptr, tx_header_ptr, tx_data, tx_mailbox_ptr);
+void can_send_PEI_Current(uint8_t shutdown_flags) {
+	// Configure TX header
+	CAN_TxHeaderTypeDef tx_header;
+	set_tx_header_defaults(&tx_header);
+	tx_header.StdId = 0x387;
+	tx_header.DLC = 5;
+
+	uint8_t tx_data[8];
+	tx_data[0] = HI8(bat_pack.current_raw);
+	tx_data[1] = LO8(bat_pack.current_raw);
+	tx_data[2] = HI8(bat_pack.current_ref_raw);
+	tx_data[3] = LO8(bat_pack.current_ref_raw);
+	tx_data[4] = shutdown_flags;
+
+	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &PEI_CURRENT_TX_MAILBOX);
 }
 
 void can_send_Charger() {
@@ -72,7 +87,40 @@ void can_send_Charger() {
 	tx_data[3] = LO8(charger_max_current);
 	tx_data[4] = charge_control;
 
-	CAN_SendMsg(&hcan2, &tx_header, tx_data, &PEI_CHARGER_TX_MAILBOX);
+	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &PEI_CHARGER_TX_MAILBOX);
+}
+
+void can_send_BMS_Status() {
+	// Configure TX header
+	CAN_TxHeaderTypeDef tx_header;
+	set_tx_header_defaults(&tx_header);
+	tx_header.StdId = 0x380;
+	tx_header.DLC = 5;
+
+	uint8_t tx_data[8];
+	tx_data[0] = HI8(bat_pack.status);
+	tx_data[1] = LO8(bat_pack.status);
+	tx_data[2] = HI8(bat_pack.spi_fault_addresses);
+	tx_data[3] = LO8(bat_pack.spi_fault_addresses);
+	tx_data[4] = get_max_fault_ic_addr();
+
+	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_STATUS_TX_MAILBOX);
+}
+
+void can_send_BMS_Data() {
+	// Configure TX header
+	CAN_TxHeaderTypeDef tx_header;
+	set_tx_header_defaults(&tx_header);
+	tx_header.StdId = 0x381;
+	tx_header.DLC = 4;
+
+	uint8_t tx_data[8];
+	tx_data[0] = HI8(bat_pack.HI_temp_raw);
+	tx_data[1] = LO8(bat_pack.HI_temp_raw);
+	tx_data[2] = HI8(bat_pack.total_voltage_raw);
+	tx_data[3] = LO8(bat_pack.total_voltage_raw);
+
+	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_DATA_TX_MAILBOX);
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
@@ -86,16 +134,14 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 		hv_requested = CAN_RX0_BUFFER[1];
 		vcu_state = CAN_RX0_BUFFER[5];
 
-		// TODO: Un-comment after merge with BMS branch
-		//bat_pack.status &= ~CHARGEMODE;
+		bat_pack.status &= ~CHARGEMODE;
 	}
 	else if (hcan_ptr == &hcan2) {
 		charger_tickstart = HAL_GetTick();
 		ticks_since_charger_message = 0;
 		charger_attached = 1;
 
-		// TODO: Un-comment after merge with BMS branch
-		//bat_pack.status |= CHARGEMODE;
+		bat_pack.status |= CHARGEMODE;
 
 		charger_status = CAN_RX1_BUFFER[4];
 		if ((charger_status & 0b1111) == 0) { // no faults, charger active

@@ -13,12 +13,10 @@
 
 #define CAN_TIMEOUT_TICK_COUNT 5000
 
-// TODO: Implement after merge with BMS branch
 void can_send_PEI_Current(uint8_t shutdown_flags);
 
 void can_send_Charger();
 
-// TODO: Implement after merge with BMS branch
 void can_send_BMS_Status();
 void can_send_BMS_Data();
 

@@ -24,6 +24,7 @@
 #include <stdint.h>
 
 #include "fsm.h"
+#include "cell_interface.h"
 #include "can_manager.h"
 #include "charger.h"
 #include "relays.h"
@@ -77,7 +78,9 @@ VCU_STATE_t vcu_state = LV;
 uint8_t hv_requested = 0;
 uint8_t vcu_attached = 0;
 
-// TODO: make external declaration of pack struct
+// BMS parameters
+extern BAT_PACK_t bat_pack;
+BMS_MODE_t bms_status = BMS_NORMAL;
 
 // MC parameters
 int16_t mc_voltage = 0;
@@ -164,6 +167,9 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim10);
   LCD_Init(&htim10);
+  cell_interface_init(&hspi5, &htim10);
+
+  uint32_t cell_disconnect_check_tickstart = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -172,7 +178,37 @@ int main(void)
   {
 	  // BMS
 
-	  // TODO: Insert BMS state machine code after merge with BMS branch
+	  update_voltages(&hspi5, &htim10);
+	  update_temps(&hspi5, &htim10);
+
+	  process_voltages();
+	  process_temps();
+
+	  if ((HAL_GetTick() - cell_disconnect_check_tickstart) > 1000) {
+		  cell_disconnect_check();
+		  cell_disconnect_check_tickstart = HAL_GetTick();
+	  }
+
+	  switch (bms_status) {
+		  case BMS_NORMAL:
+			  HAL_GPIO_WritePin(BMS_OK_GPIO_Port, BMS_OK_Pin, GPIO_PIN_SET);
+			  bms_status = bat_health_check();
+
+			  // Check if we're charging accumulator
+			  if(charger_attached && (pei_state == PEI_HV)){
+				  balance_cells(&hspi5, &htim1);
+			  } else {
+				  disable_cell_balancing(&hspi5, &htim10);
+			  }
+
+			  break;
+
+		  case BMS_FAULT:
+			  HAL_GPIO_WritePin(BMS_OK_GPIO_Port, BMS_OK_Pin, GPIO_PIN_RESET);
+			  disable_cell_balancing(&hspi5, &htim10); // make sure cell balancing is disabled
+
+			  break;
+	  }
 
 	  // -------------------- BMS ----------------------
 
@@ -520,6 +556,8 @@ static void MX_CAN2_Init(void)
   }
   /* USER CODE BEGIN CAN2_Init 2 */
   // Filter charger messages into FIFO0
+  uint32_t charger_id = 0x18FF50EF << 3;
+
   CAN_FilterTypeDef can2_filter;
   can2_filter.FilterActivation = CAN_FILTER_ENABLE;
   can2_filter.SlaveStartFilterBank = 18;
@@ -527,10 +565,10 @@ static void MX_CAN2_Init(void)
   can2_filter.FilterFIFOAssignment = CAN_FILTER_FIFO0;
   can2_filter.FilterMode = CAN_FILTERMODE_IDMASK;
   can2_filter.FilterScale = CAN_FILTERSCALE_32BIT;
-  can2_filter.FilterIdHigh = 0x18FF;
-  can2_filter.FilterIdLow = (0x50E5 & 0x1FFF) << 3;
-  can2_filter.FilterMaskIdHigh = 0x18FF;
-  can2_filter.FilterMaskIdLow = (0x50E5 & 0x1FFF) << 3;
+  can2_filter.FilterIdHigh = charger_id >> 16;
+  can2_filter.FilterIdLow = charger_id & 0x0000FFFF;
+  can2_filter.FilterMaskIdHigh = charger_id >> 16;
+  can2_filter.FilterMaskIdLow = charger_id & 0x0000FFFF;
   if (HAL_CAN_ConfigFilter(&hcan2, &can2_filter) != HAL_OK) {
 	  Error_Handler();
   }
@@ -598,7 +636,7 @@ static void MX_SPI5_Init(void)
   hspi5.Init.CLKPolarity = SPI_POLARITY_HIGH;
   hspi5.Init.CLKPhase = SPI_PHASE_2EDGE;
   hspi5.Init.NSS = SPI_NSS_SOFT;
-  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
+  hspi5.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
   hspi5.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi5.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi5.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;

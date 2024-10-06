@@ -66,7 +66,7 @@ typedef enum {
 uint8_t hv_request();
 uint8_t hv_allowed();
 uint8_t precharge_ready();
-uint8_t precharge_complete(); // TODO: Implement after merge with BMS branch
+uint8_t precharge_complete();
 
 void update_status();
 

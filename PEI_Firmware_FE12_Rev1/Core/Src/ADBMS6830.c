@@ -216,6 +216,8 @@ void ADBMS6830_initialize(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_p
 		tx_pwmb[ic][5] = PWMB5;
 	}
 
+	ADBMS6830_set_Aux_ADC(0, 0, AUX_CH_ALL);
+
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	HAL_Delay(5); // Waking up from sleep state requires more time
 
