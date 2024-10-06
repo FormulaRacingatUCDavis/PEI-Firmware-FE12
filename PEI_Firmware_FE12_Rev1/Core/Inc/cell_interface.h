@@ -82,12 +82,12 @@ typedef struct {
 	uint16_t current_raw;
 	double current;
 
-	uint8_t AVG_temp_c;
 	int16_t HI_temp_raw;
 	uint8_t HI_temp_c;
+	uint8_t AVG_temp_c;
 	uint8_t LO_temp_c;
 
-	double SOC_percent;
+	uint8_t SOC_percent;
 
 	uint8_t status;
 

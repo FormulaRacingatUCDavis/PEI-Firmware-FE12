@@ -199,7 +199,7 @@ void fk(Matrix *xhatk_1_ptr, float I_val, Matrix *xhat_ptr) {
 
 // EKF Calculator function (to compute values of xhatCorrected and PCorrected
 // continuously)
-uint8_t EKF() {
+void EKF() {
   if(!initialized) return 0;
 
   //----------------- CALCULATIONS FOR xhat -----------------
@@ -280,7 +280,7 @@ uint8_t EKF() {
   mat_set(1, 2, mat_get(1, 2, &PCorrected), &Pk_1);
   mat_set(2, 2, mat_get(2, 2, &PCorrected), &Pk_1);
 
-  return (uint8_t)(mat_get(1, 1, &xhatCorrected) * 100);
+  bat_pack.SOC_percent = (uint8_t)(mat_get(1, 1, &xhatCorrected) * 100);
 
   // float soc = mat_get(1, 1, xhatk_1_ptr);
   // if (soc < 0) {

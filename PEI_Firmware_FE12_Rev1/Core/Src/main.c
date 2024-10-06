@@ -27,6 +27,7 @@
 #include "cell_interface.h"
 #include "can_manager.h"
 #include "charger.h"
+#include "SOC.h"
 #include "relays.h"
 #include "LCD.h"
 
@@ -79,7 +80,6 @@ uint8_t hv_requested = 0;
 uint8_t vcu_attached = 0;
 
 // BMS parameters
-extern BAT_PACK_t bat_pack;
 BMS_MODE_t bms_status = BMS_NORMAL;
 
 // MC parameters
@@ -112,13 +112,18 @@ static void MX_IWDG_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
-void init();
+void BMS_Init();
 double raw_to_amps(uint16_t current_raw);
 void update_current();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void BMS_Init() {
+	cell_interface_init(&hspi5, &htim10);
+	init_SOC_vars();
+}
+
 double raw_to_amps(uint16_t current_raw) {
 	double mVolts = ((double)current_raw / 4095) * 3.3 * 1000;
 	double current = ((mVolts * 7.4 / 4.7) - 2500) / 6.667;
@@ -167,7 +172,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim10);
   LCD_Init(&htim10);
-  cell_interface_init(&hspi5, &htim10);
+  BMS_Init();
 
   uint32_t cell_disconnect_check_tickstart = HAL_GetTick();
   /* USER CODE END 2 */
@@ -183,6 +188,10 @@ int main(void)
 
 	  process_voltages();
 	  process_temps();
+
+	  // Update SOC estimate
+	  update_SOC_input();
+	  EKF(); // run extended Kalman filter and update pack struct SOC estimate
 
 	  if ((HAL_GetTick() - cell_disconnect_check_tickstart) > 1000) {
 		  cell_disconnect_check();
