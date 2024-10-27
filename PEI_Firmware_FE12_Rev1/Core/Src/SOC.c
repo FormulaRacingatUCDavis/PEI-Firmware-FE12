@@ -8,6 +8,7 @@
 
 // https://www.mathworks.com/help/simscape-battery/ref/socestimatorkalmanfilter.html
 
+#include <stdint.h>
 #include <math.h>
 
 #include "SOC.h"
@@ -16,18 +17,26 @@
 
 extern BAT_PACK_t bat_pack;
 
+// TODO: Update for new pack
+// SOC Constants
+static const float dt = 0.1f; // Sampling Period
+static const float R0 = 0.0145f;
+static const float Rc = 0.009f;
+static const float Cbat = 4.1f * 60.0f * 60.0f;
+static const float Cc = 1666.0f;
+
 // Initializing probability matrices
-Matrix Aprime;
-Matrix Aprime_transpose;
+static Matrix Aprime;
+static Matrix Aprime_transpose;
 
 // Matrix Eprime;
 // Matrix Eprime_transpose;
 
-Matrix Cprime; // VOC(SOC)
-Matrix Cprime_transpose;
+static Matrix Cprime; // VOC(SOC)
+static Matrix Cprime_transpose;
 
 // Coefficients for probability
-float Rk;
+static float Rk;
 
 // --------------------------------------------------------------------------
 // At time k
@@ -43,26 +52,25 @@ float Rk;
 // (Constant)Cbat : Capacity of battery in AmpHours ?
 
 //// Initializing the matrixes we'll need to use
-Matrix xhat; // xhat is a 2-by-1 matrix, top value is: SOC_estimated, bottom is
+static Matrix xhat; // xhat is a 2-by-1 matrix, top value is: SOC_estimated, bottom is
              // Vc_estimated
-Matrix Qk1;
-Matrix xhatk_1;
-Matrix fk_;
-Matrix xhatCorrected;
-Matrix PCorrected;
-Matrix Lk;
-Matrix P;
-Matrix Pk_1;
-Matrix sub_mat_1;
-Matrix sub_mat_2;
-Matrix sub_mat_3;
+static Matrix Qk1;
+static Matrix xhatk_1;
+static Matrix fk_;
+static Matrix xhatCorrected;
+static Matrix PCorrected;
+static Matrix Lk;
+static Matrix P;
+static Matrix Pk_1;
+static Matrix sub_mat_1;
+static Matrix sub_mat_2;
+static Matrix sub_mat_3;
 
 // Variables subject to constant change
-float I;
-float Ik_1;
-float V; // current V
+static float I;
+static float V;
 
-int initialized = 0;
+static uint8_t initialized = 0;
 
 void init_SOC_vars() {
   // Aprime
@@ -124,16 +132,16 @@ void init_SOC_vars() {
 }
 
 void update_SOC_input() {
-  V = bat_pack.total_voltage / 120.0f; // 120 cells series
-  I = bat_pack.current / 3.0f;         // 3 cells parallel
+  V = bat_pack.total_voltage / 120; // 120 cells series
+  I = bat_pack.current / 3;         // 3 cells parallel
 }
 
 //------------------------------- SMALLER CALCULATION FUNCTIONS
 //--------------------------------
 
 // Functions we need to calculate
-float VOC(float soc) {
-  int soc_int = (int)(100 * soc);
+static float VOC(float soc) {
+  uint8_t soc_int = (uint8_t)(100 * soc);
 
   // TODO: Update for new packs
   const uint16_t voc_lt[101] = {
@@ -150,15 +158,15 @@ float VOC(float soc) {
       41668};
 
   if (soc_int < 0) {
-    return 0.0f; //
+    return 0;
   } else if (soc_int > 100) {
-    return 4.2f;
+    return 4.2;
   } else {
     return ((float)voc_lt[soc_int]) / 10000;
   }
 }
 
-float dVOC_dSOC(float soc) {
+static float dVOC_dSOC(float soc) {
   if (soc < 0)
     soc = 0;
   if (soc > 0.99)
@@ -170,14 +178,14 @@ float dVOC_dSOC(float soc) {
 // hk is observation function
 // since measured voltage is our observed value, hk returns estimated voltage
 // based on current and SOC
-float hk(float SOC_val, float I_val) {
+static float hk(float SOC_val, float I_val) {
   float vc_now = mat_get(2, 1, &xhat);
   float Vt = VOC(SOC_val) - (R0 * I_val) - vc_now;
   // printf("Vt estimated: %f\n", Vt);
   return Vt;
 }
 
-void fk(Matrix *xhatk_1_ptr, float I_val, Matrix *xhat_ptr) {
+static void fk(Matrix *xhatk_1_ptr, float I_val, Matrix *xhat_ptr) {
   float Vc = mat_get(2, 1, xhatk_1_ptr);
 
   Matrix f;
@@ -200,7 +208,7 @@ void fk(Matrix *xhatk_1_ptr, float I_val, Matrix *xhat_ptr) {
 // EKF Calculator function (to compute values of xhatCorrected and PCorrected
 // continuously)
 void EKF() {
-  if(!initialized) return 0;
+  if (!initialized) return;
 
   //----------------- CALCULATIONS FOR xhat -----------------
   // advance the state estimation based on measured current

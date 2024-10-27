@@ -15,47 +15,38 @@
 extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef hcan2;
 
-extern uint8_t hv_requested;
-extern uint8_t vcu_state;
-extern uint16_t vcu_attached;
-extern uint32_t ticks_since_vcu_message;
+extern volatile uint8_t hv_requested;
+extern volatile uint8_t vcu_state;
+extern volatile uint16_t vcu_attached;
+extern volatile uint32_t ticks_since_vcu_message;
 
-extern int16_t mc_voltage;
-extern uint8_t mc_vsm_state;
-extern uint8_t mc_discharge_state;
-extern uint32_t mc_post_faults;
-extern uint32_t mc_run_faults;
-extern uint32_t ticks_since_mc_message;
+extern volatile int16_t mc_voltage;
+extern volatile uint8_t mc_vsm_state;
+extern volatile uint8_t mc_discharge_state;
+extern volatile uint32_t mc_post_faults;
+extern volatile uint32_t mc_run_faults;
+extern volatile uint32_t ticks_since_mc_message;
 
-extern uint8_t charger_attached;
-extern uint8_t charger_status;
+extern volatile uint8_t charger_attached;
+extern volatile uint8_t charger_status;
 extern uint16_t charger_max_current;
 extern uint8_t charge_control;
-extern uint32_t ticks_since_charger_message;
+extern volatile uint32_t ticks_since_charger_message;
 
-extern BAT_PACK_t bat_pack;
+extern volatile BAT_PACK_t bat_pack;
 
-uint32_t vcu_tickstart = 0;
-uint32_t mc_tickstart = 0;
-uint32_t charger_tickstart = 0;
+volatile uint32_t vcu_tickstart = 0;
+volatile uint32_t mc_tickstart = 0;
+volatile uint32_t charger_tickstart = 0;
 
-CAN_RxHeaderTypeDef rx0_header;
-CAN_RxHeaderTypeDef rx1_header;
-
-uint32_t PEI_CURRENT_TX_MAILBOX;
-uint32_t PEI_CHARGER_TX_MAILBOX;
-uint32_t BMS_STATUS_TX_MAILBOX;
-uint32_t BMS_DATA_TX_MAILBOX;
-
-uint8_t CAN_RX0_BUFFER[8];
-uint8_t CAN_RX1_BUFFER[8];
-
-void set_tx_header_defaults(CAN_TxHeaderTypeDef* tx_header_ptr) {
+static void set_tx_header_defaults(CAN_TxHeaderTypeDef* const tx_header_ptr) {
 	tx_header_ptr->IDE = CAN_ID_STD;
 	tx_header_ptr->RTR = CAN_RTR_DATA;
 }
 
 void can_send_PEI_Current(uint8_t shutdown_flags) {
+	static uint32_t PEI_CURRENT_TX_MAILBOX;
+
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
@@ -73,6 +64,8 @@ void can_send_PEI_Current(uint8_t shutdown_flags) {
 }
 
 void can_send_Charger() {
+	static uint32_t PEI_CHARGER_TX_MAILBOX;
+
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	tx_header.IDE = CAN_ID_EXT;
@@ -91,6 +84,8 @@ void can_send_Charger() {
 }
 
 void can_send_BMS_Status() {
+	static uint32_t BMS_STATUS_TX_MAILBOX;
+
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
@@ -108,6 +103,8 @@ void can_send_BMS_Status() {
 }
 
 void can_send_BMS_Data() {
+	static uint32_t BMS_DATA_TX_MAILBOX;
+
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
@@ -124,6 +121,9 @@ void can_send_BMS_Data() {
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
+
+	static CAN_RxHeaderTypeDef rx0_header;
+	static uint8_t CAN_RX0_BUFFER[8];
 	HAL_CAN_GetRxMessage(hcan_ptr, CAN_RX_FIFO0, &rx0_header, CAN_RX0_BUFFER);
 
 	if (hcan_ptr == &hcan1) {
@@ -143,7 +143,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 
 		bat_pack.status |= CHARGEMODE;
 
-		charger_status = CAN_RX1_BUFFER[4];
+		charger_status = CAN_RX0_BUFFER[4];
 		if ((charger_status & 0b1111) == 0) { // no faults, charger active
 			vcu_state = CHARGING;
 		}
@@ -157,18 +157,25 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 }
 
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
+
+	static CAN_RxHeaderTypeDef rx1_header;
+	static uint8_t CAN_RX1_BUFFER[8];
 	HAL_CAN_GetRxMessage(hcan_ptr, CAN_RX_FIFO1, &rx1_header, CAN_RX1_BUFFER);
 
+	const uint32_t MC_VOLTAGE_MSG_ID = 0x0A7;
+	const uint32_t MC_STATE_MSG_ID = 0x0AA;
+	const uint32_t MC_FAULT_MSG_ID = 0x0AB;
+
 	uint32_t id = rx1_header.StdId;
-	if (id == 0x0A7) {
+	if (id == MC_VOLTAGE_MSG_ID) {
 		mc_voltage = CAN_RX1_BUFFER[1] << 8;
 		mc_voltage += CAN_RX1_BUFFER[0];
 	}
-	else if (id == 0x0AA) {
+	else if (id == MC_STATE_MSG_ID) {
 		mc_vsm_state = CAN_RX1_BUFFER[0];
 		mc_discharge_state = (CAN_RX1_BUFFER[4] >> 5) & 0x07; // bits 5-7
 	}
-	else if (id == 0x0AB) {
+	else if (id == MC_FAULT_MSG_ID) {
 		mc_post_faults = CAN_RX1_BUFFER[3] << 24;
 		mc_post_faults += CAN_RX1_BUFFER[2] << 16;
 		mc_post_faults += CAN_RX1_BUFFER[1] << 8;

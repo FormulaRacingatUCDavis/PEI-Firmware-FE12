@@ -10,9 +10,9 @@
 
 #include <stdint.h>
 
-#define CHARGER_MAX_VOLTAGE 5040 // 504 V
+#define CHARGER_MAX_VOLTAGE 5040u // 504 V
 
-#define CHARGE_STOP 1
-#define CHARGE_START 0
+#define CHARGE_STOP 1u
+#define CHARGE_START 0u
 
 #endif /* INC_CHARGER_H_ */

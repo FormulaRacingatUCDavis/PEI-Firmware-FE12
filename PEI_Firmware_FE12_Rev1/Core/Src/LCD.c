@@ -11,7 +11,7 @@
 #include "delays.h"
 
 // Wait until LCD's busy flag is false
-void wait_for_LCD(TIM_HandleTypeDef* htim_ptr) {
+static void wait_for_LCD(TIM_HandleTypeDef* const htim_ptr) {
 	GPIO_PinState is_busy = GPIO_PIN_SET;
 	GPIO_InitTypeDef GPIO_InitStruct;
 
@@ -40,8 +40,11 @@ void wait_for_LCD(TIM_HandleTypeDef* htim_ptr) {
 	HAL_GPIO_Init(LCD_DB7_GPIO_Port, &GPIO_InitStruct);
 }
 
-void send_instruction(GPIO_PinState rs, GPIO_PinState rw, uint8_t instruction, uint8_t check_busy,
-		TIM_HandleTypeDef* htim_ptr) {
+static void send_instruction(TIM_HandleTypeDef* const htim_ptr,
+							 GPIO_PinState rs,
+							 GPIO_PinState rw,
+							 uint8_t instruction,
+							 uint8_t check_busy) {
 
 	if (check_busy) wait_for_LCD(htim_ptr);
 
@@ -86,31 +89,31 @@ void LCD_SetBacklight(uint8_t backlight_state) {
 	HAL_GPIO_WritePin(LCD_Backlight_GPIO_Port, LCD_Backlight_Pin, pin_state);
 }
 
-void LCD_Init(TIM_HandleTypeDef* htim_ptr) {
+void LCD_Init(TIM_HandleTypeDef* const htim_ptr) {
 	LCD_SetBacklight(1);
 	HAL_Delay(45); // Wait more than 40 ms
 
 	// Enable 8-bit mode, 2-line display
-	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, 0x38, 0, htim_ptr);
+	send_instruction(htim_ptr, GPIO_PIN_RESET, GPIO_PIN_RESET, 0x38, 0);
 	delay_us(htim_ptr, 40); // wait for LCD to process instruction, can't check busy flag
 
-	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, 0x38, 0, htim_ptr);
+	send_instruction(htim_ptr, GPIO_PIN_RESET, GPIO_PIN_RESET, 0x38, 0);
 
 	// Turn display on
-	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, 0x0C, 1, htim_ptr);
+	send_instruction(htim_ptr, GPIO_PIN_RESET, GPIO_PIN_RESET, 0x0C, 1);
 
 	// Clear display
-	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, 0x01, 1, htim_ptr);
+	send_instruction(htim_ptr, GPIO_PIN_RESET, GPIO_PIN_RESET, 0x01, 1);
 
 	// Set cursor to move right, disable display shifting
-	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, 0x06, 1, htim_ptr);
+	send_instruction(htim_ptr, GPIO_PIN_RESET, GPIO_PIN_RESET, 0x06, 1);
 }
 
-void LCD_ReturnHome(TIM_HandleTypeDef* htim_ptr) {
-	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, 0x02, 1, htim_ptr);
+void LCD_ReturnHome(TIM_HandleTypeDef* const htim_ptr) {
+	send_instruction(htim_ptr, GPIO_PIN_RESET, GPIO_PIN_RESET, 0x02, 1);
 }
 
-void LCD_Position(TIM_HandleTypeDef* htim_ptr, uint8_t row_idx, uint8_t col_idx) {
+void LCD_Position(TIM_HandleTypeDef* const htim_ptr, uint8_t row_idx, uint8_t col_idx) {
 	uint8_t instruction = 0x80;
 	uint8_t ddram_addr = 0;
 
@@ -118,15 +121,15 @@ void LCD_Position(TIM_HandleTypeDef* htim_ptr, uint8_t row_idx, uint8_t col_idx)
 	ddram_addr += 0x01 * col_idx;
 	instruction += ddram_addr;
 
-	send_instruction(GPIO_PIN_RESET, GPIO_PIN_RESET, instruction, 1, htim_ptr);
+	send_instruction(htim_ptr, GPIO_PIN_RESET, GPIO_PIN_RESET, instruction, 1);
 }
 
-void LCD_PrintString(TIM_HandleTypeDef* htim_ptr, char* str) {
+void LCD_PrintString(TIM_HandleTypeDef* const htim_ptr, char* const str) {
 	uint8_t index = 0;
 	uint8_t character = str[index];
 
 	while (character != '\0') {
-		send_instruction(GPIO_PIN_SET, GPIO_PIN_RESET, character, 1, htim_ptr);
+		send_instruction(htim_ptr, GPIO_PIN_SET, GPIO_PIN_RESET, character, 1);
 
 		index++;
 		character = str[index];

@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include "stm32f7xx_hal.h"
 
-#define CAN_TIMEOUT_TICK_COUNT 5000
+#define CAN_TIMEOUT_TICK_COUNT 5000u
 
 void can_send_PEI_Current(uint8_t shutdown_flags);
 

@@ -30,6 +30,7 @@
 #include "SOC.h"
 #include "relays.h"
 #include "LCD.h"
+#include "display.h"
 
 /* USER CODE END Includes */
 
@@ -67,36 +68,30 @@ UART_HandleTypeDef huart3;
 // PEI parameters
 PEI_STATE_t pei_state = PEI_LV;
 uint8_t pei_status = NORMAL;
-int16_t current;
-int16_t currentOffset;
-uint8_t shutdown_flags = 0;
 
 // Relay parameters
 extern uint8_t relay_flags;
 
 // VCU parameters
-VCU_STATE_t vcu_state = LV;
-uint8_t hv_requested = 0;
-uint8_t vcu_attached = 0;
-
-// BMS parameters
-BMS_MODE_t bms_status = BMS_NORMAL;
+volatile VCU_STATE_t vcu_state = LV;
+volatile uint8_t hv_requested = 0;
+volatile uint8_t vcu_attached = 0;
 
 // MC parameters
-int16_t mc_voltage = 0;
-MC_VSM_STATE_t mc_vsm_state = VSM_START;
-MC_DISCHARGE_STATE_t mc_discharge_state = DISCHARGE_DISABLED;
-uint32_t mc_post_faults = 0;
-uint32_t mc_run_faults = 0;
+volatile int16_t mc_voltage = 0;
+volatile MC_VSM_STATE_t mc_vsm_state = VSM_START;
+volatile MC_DISCHARGE_STATE_t mc_discharge_state = DISCHARGE_DISABLED;
+volatile uint32_t mc_post_faults = 0;
+volatile uint32_t mc_run_faults = 0;
 
 // Charger parameters
-extern uint8_t charger_attached;
+extern volatile uint8_t charger_attached;
 extern uint8_t charge_control;
 
 // Tick counters
-uint32_t ticks_since_vcu_message = 0;
-uint32_t ticks_since_mc_message = 0;
-uint32_t ticks_since_charger_message = 0;
+volatile uint32_t ticks_since_vcu_message = 0;
+volatile uint32_t ticks_since_mc_message = 0;
+volatile uint32_t ticks_since_charger_message = 0;
 
 /* USER CODE END PV */
 
@@ -112,19 +107,19 @@ static void MX_IWDG_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
-void BMS_Init();
-double raw_to_amps(uint16_t current_raw);
-void update_current();
+static void BMS_Init();
+static double raw_to_amps(uint16_t current_raw);
+static void update_current();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void BMS_Init() {
+static void BMS_Init() {
 	cell_interface_init(&hspi5, &htim10);
 	init_SOC_vars();
 }
 
-double raw_to_amps(uint16_t current_raw) {
+static double raw_to_amps(uint16_t current_raw) {
 	double mVolts = ((double)current_raw / 4095) * 3.3 * 1000;
 	double current = ((mVolts * 7.4 / 4.7) - 2500) / 6.667;
 
@@ -174,6 +169,11 @@ int main(void)
   LCD_Init(&htim10);
   BMS_Init();
 
+  int16_t current = 0;
+  int16_t currentRef = 0;
+  uint8_t shutdown_flags = 0;
+
+  BMS_MODE_t bms_status = BMS_NORMAL;
   uint32_t cell_disconnect_check_tickstart = HAL_GetTick();
   /* USER CODE END 2 */
 
@@ -194,7 +194,7 @@ int main(void)
 	  EKF(); // run extended Kalman filter and update pack struct SOC estimate
 
 	  if ((HAL_GetTick() - cell_disconnect_check_tickstart) > 1000) {
-		  cell_disconnect_check();
+		  cell_disconnect_check(&hspi5, &htim10);
 		  cell_disconnect_check_tickstart = HAL_GetTick();
 	  }
 
@@ -205,7 +205,7 @@ int main(void)
 
 			  // Check if we're charging accumulator
 			  if(charger_attached && (pei_state == PEI_HV)){
-				  balance_cells(&hspi5, &htim1);
+				  balance_cells(&hspi5, &htim10);
 			  } else {
 				  disable_cell_balancing(&hspi5, &htim10);
 			  }
@@ -224,7 +224,6 @@ int main(void)
 	  // PEI
 
 	  charge_control = CHARGE_STOP;
-	  shutdown_flags = 0;
 
 	  shutdown_flags = relay_flags & 0x07;
 	  if (!HAL_GPIO_ReadPin(IMD_Fault_GPIO_Port, IMD_Fault_Pin)) shutdown_flags |= (1 << 5);
@@ -290,9 +289,13 @@ int main(void)
 
 	  update_can_status();
 
+	  update_display(&htim10);
 	  HAL_GPIO_TogglePin(Heartbeat_GPIO_Port, Heartbeat_Pin);
 
 	  if (charger_attached) can_send_Charger();
+	  can_send_PEI_Current(shutdown_flags);
+	  can_send_BMS_Status();
+	  can_send_BMS_Data();
 
 	  HAL_IWDG_Refresh(&hiwdg);
 
@@ -565,7 +568,7 @@ static void MX_CAN2_Init(void)
   }
   /* USER CODE BEGIN CAN2_Init 2 */
   // Filter charger messages into FIFO0
-  uint32_t charger_id = 0x18FF50EF << 3;
+  const uint32_t charger_id = 0x18FF50EF << 3;
 
   CAN_FilterTypeDef can2_filter;
   can2_filter.FilterActivation = CAN_FILTER_ENABLE;
@@ -759,7 +762,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOE, LCD_DB4_Pin|LCD_DB5_Pin|LCD_DB6_Pin|LCD_DB7_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, LCD_DB1_Pin|LCD_DB0_Pin|LCD_DB2_Pin|LCD_DB3_Pin
+  HAL_GPIO_WritePin(GPIOD, LCD_DB0_Pin|LCD_DB1_Pin|LCD_DB2_Pin|LCD_DB3_Pin
                           |LCD_Backlight_Pin|LCD_RW_Pin|LCD_E_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
@@ -789,9 +792,9 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LCD_DB1_Pin LCD_DB0_Pin LCD_DB2_Pin LCD_DB3_Pin
+  /*Configure GPIO pins : LCD_DB0_Pin LCD_DB1_Pin LCD_DB2_Pin LCD_DB3_Pin
                            LCD_Backlight_Pin LCD_RW_Pin LCD_E_Pin */
-  GPIO_InitStruct.Pin = LCD_DB1_Pin|LCD_DB0_Pin|LCD_DB2_Pin|LCD_DB3_Pin
+  GPIO_InitStruct.Pin = LCD_DB0_Pin|LCD_DB1_Pin|LCD_DB2_Pin|LCD_DB3_Pin
                           |LCD_Backlight_Pin|LCD_RW_Pin|LCD_E_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;

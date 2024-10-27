@@ -10,8 +10,7 @@
 
 #include <stdint.h>
 
-// Constant(s)
-
+// Constants
 #define MAX_ELEMENTS 4
 
 // Type(s)
@@ -24,16 +23,16 @@ typedef struct MatrixStruct {
 
 // Function declarations
 
-void mat_init(uint8_t rows, uint8_t columns, Matrix *matrix);
+void mat_init(uint8_t rows, uint8_t columns, Matrix* const matrix);
 void mat_set(uint8_t row, uint8_t column, float element,
-             Matrix *matrix);
-float mat_get(uint8_t row, uint8_t column, Matrix *);
-void mat_fill_zero(Matrix *);
-void mat_multiply(Matrix *matrixA, Matrix *matrixB, Matrix *matrixC);
-void mat_add(Matrix *A, Matrix *B, Matrix *result);
-void mat_scale(Matrix *A, float k, Matrix *result);
-void mat_transpose(Matrix *matrix,
-                   Matrix *result); // Function to transpose a 2x2 matrix
+             Matrix* const matrix);
+float mat_get(uint8_t row, uint8_t column, Matrix* const matrix);
+void mat_fill_zero(Matrix* const matrix);
+void mat_multiply(Matrix* const matrixA, Matrix* const matrixB, Matrix* const matrixC);
+void mat_add(Matrix* const A, Matrix* const B, Matrix* const result);
+void mat_scale(Matrix* const A, float k, Matrix* const result);
+void mat_transpose(Matrix* const matrix,
+                   Matrix* const result); // Function to transpose a 2x2 matrix
                                     //                         ^^^
 
 #endif /* INC_MATRIX_MULT_H_ */

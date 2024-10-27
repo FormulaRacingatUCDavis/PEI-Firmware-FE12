@@ -12,7 +12,7 @@
 #include "relays.h"
 #include "main.h"
 
-uint8_t relay_flags;
+uint8_t relay_flags = 0b000;
 
 // Closes the precharge relay, opens the positive relay
 void start_precharge() {

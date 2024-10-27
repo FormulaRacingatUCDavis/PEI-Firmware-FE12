@@ -71,10 +71,10 @@ void Error_Handler(void);
 #define LCD_DB6_GPIO_Port GPIOE
 #define LCD_DB7_Pin GPIO_PIN_10
 #define LCD_DB7_GPIO_Port GPIOE
-#define LCD_DB1_Pin GPIO_PIN_14
-#define LCD_DB1_GPIO_Port GPIOD
-#define LCD_DB0_Pin GPIO_PIN_15
+#define LCD_DB0_Pin GPIO_PIN_14
 #define LCD_DB0_GPIO_Port GPIOD
+#define LCD_DB1_Pin GPIO_PIN_15
+#define LCD_DB1_GPIO_Port GPIOD
 #define SDC_Acc_Out_Pin GPIO_PIN_6
 #define SDC_Acc_Out_GPIO_Port GPIOC
 #define SDC_Final_Pin GPIO_PIN_7

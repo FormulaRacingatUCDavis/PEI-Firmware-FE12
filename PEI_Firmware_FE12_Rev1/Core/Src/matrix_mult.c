@@ -8,7 +8,7 @@
 
 #include "matrix_mult.h"
 
-void mat_init(unsigned char rows, unsigned char columns, Matrix *matrix) {
+void mat_init(uint8_t rows, uint8_t columns, Matrix* const matrix) {
 
   matrix->rows = rows;
   matrix->columns = columns;
@@ -17,28 +17,28 @@ void mat_init(unsigned char rows, unsigned char columns, Matrix *matrix) {
   return;
 }
 
-void mat_set(unsigned char row, unsigned char column, float element,
-             Matrix *matrix) {
+void mat_set(uint8_t row, uint8_t column, float element,
+        	 Matrix* const matrix) {
 
   matrix->elements[(row - 1) * matrix->columns + (column - 1)] = element;
 
   return;
 }
 
-float mat_get(unsigned char row, unsigned char column, Matrix *matrix) {
+float mat_get(uint8_t row, uint8_t column, Matrix* const matrix) {
   return matrix->elements[(row - 1) * matrix->columns + (column - 1)];
 }
 
-void mat_fill_zero(Matrix *matrix) {
+void mat_fill_zero(Matrix* const matrix) {
 
-  for (int i = 0; i < MAX_ELEMENTS; i++) {
+  for (uint8_t i = 0; i < MAX_ELEMENTS; i++) {
     matrix->elements[i] = 0;
   }
 
   return;
 }
 
-void mat_multiply(Matrix *matrixA, Matrix *matrixB, Matrix *matrixC) {
+void mat_multiply(Matrix* const matrixA, Matrix* const matrixB, Matrix* const matrixC) {
 
   // matrixA.columns != matrixB.rows should yield an error
   // BUT it should not check that in this application
@@ -48,9 +48,9 @@ void mat_multiply(Matrix *matrixA, Matrix *matrixB, Matrix *matrixC) {
   mat_init(matrixA->rows, matrixB->columns, matrixC);
   mat_fill_zero(matrixC);
 
-  for (int i = 1; i <= matrixC->rows; i++) {
-    for (int j = 1; j <= matrixC->columns; j++) {
-      for (int k = 1; k <= matrixA->columns; k++) {
+  for (uint8_t i = 1; i <= matrixC->rows; i++) {
+    for (uint8_t j = 1; j <= matrixC->columns; j++) {
+      for (uint8_t k = 1; k <= matrixA->columns; k++) {
         mat_set(i, j,
                 mat_get(i, j, matrixC) +
                     mat_get(i, k, matrixA) * mat_get(k, j, matrixB),
@@ -60,11 +60,11 @@ void mat_multiply(Matrix *matrixA, Matrix *matrixB, Matrix *matrixC) {
   }
 }
 
-void mat_scale(Matrix *A, float k, Matrix *result) {
+void mat_scale(Matrix* const A, float k, Matrix* const result) {
   mat_init(A->rows, A->columns, result);
 
-  for (int i = 1; i <= A->rows; i++) {
-    for (int j = 1; j <= A->columns; j++) {
+  for (uint8_t i = 1; i <= A->rows; i++) {
+    for (uint8_t j = 1; j <= A->columns; j++) {
       float val = k * mat_get(i, j, A);
       mat_set(i, j, val, result);
     }
@@ -73,7 +73,7 @@ void mat_scale(Matrix *A, float k, Matrix *result) {
 
 // Function to transpose a 2x2 matrix
 //                         ^^^
-void mat_transpose(Matrix *matrix, Matrix *result) {
+void mat_transpose(Matrix* const matrix, Matrix* const result) {
   mat_init(2, 2, result);
 
   float matrix_1_2 = mat_get(1, 2, matrix);
@@ -89,9 +89,9 @@ void mat_transpose(Matrix *matrix, Matrix *result) {
   mat_set(2, 2, matrix_2_2, result);
 }
 
-void mat_add(Matrix *A, Matrix *B, Matrix *result) {
-  for (int i = 1; i <= A->rows; i++) {
-    for (int j = 1; j <= A->columns; j++) {
+void mat_add(Matrix* const A, Matrix* const B, Matrix* const result) {
+  for (uint8_t i = 1; i <= A->rows; i++) {
+    for (uint8_t j = 1; j <= A->columns; j++) {
       float sum = mat_get(i, j, A) + mat_get(i, j, B);
       mat_set(i, j, sum, result);
     }

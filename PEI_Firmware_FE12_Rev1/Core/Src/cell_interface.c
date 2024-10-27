@@ -11,9 +11,13 @@
 #include "cell_interface.h"
 #include "ADBMS6830.h"
 
-BAT_PACK_t bat_pack;
+static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
+static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
+static const uint8_t SPI_ERROR_LIMIT = 100u;
 
-void pack_init() {
+volatile BAT_PACK_t bat_pack;
+
+static void pack_init() {
 
 	// Initialize cell voltages and temps
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
@@ -54,7 +58,7 @@ void pack_init() {
 	bat_pack.status = NO_ERROR;
 }
 
-void cell_interface_init(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+void cell_interface_init(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	ADBMS6830_initialize(hspi_ptr, htim_ptr);
 	pack_init();
 }
@@ -64,7 +68,7 @@ void set_voltage(uint8_t subpack_num, uint8_t cell_num, int16_t voltage_raw) {
 	bat_pack.subpacks[subpack_num].cells[cell_num].voltage = (voltage_raw * 0.00015) + 1.5;
 }
 
-double get_voltage(uint8_t subpack_num, uint8_t cell_num) {
+float get_voltage(uint8_t subpack_num, uint8_t cell_num) {
 	return bat_pack.subpacks[subpack_num].cells[cell_num].voltage;
 }
 
@@ -75,13 +79,14 @@ int16_t get_voltage_raw(uint8_t subpack_num, uint8_t cell_num) {
 void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw) {
 	bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw = temp_raw;
 
-	double temp_voltage = (temp_raw * 0.00015) + 1.5;
-	double temp = (1.0 / ((1.0 / 298.15) + ((1.0 / 3428.0) * log(temp_voltage / (3 - temp_voltage))))) - 273.15;
+	float temp_voltage = (temp_raw * 0.00015) + 1.5;
+	float temp = (1.0 / ((1.0 / 298.15) + ((1.0 / 3428.0) * log(temp_voltage / (3 - temp_voltage)))))
+				  - 273.15;
 
 	bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_c = temp;
 }
 
-double get_cell_temp(uint8_t subpack_num, uint8_t temp_num) {
+float get_cell_temp(uint8_t subpack_num, uint8_t temp_num) {
 	return bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_c;
 }
 
@@ -89,17 +94,17 @@ int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num) {
 	return bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw;
 }
 
-void update_spi_errors(uint8_t spi_errors[N_OF_ADBMS]) {
+static void update_spi_errors(uint8_t spi_errors[N_OF_ADBMS]) {
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		bat_pack.spi_error_counters[ic] += spi_errors[ic];
 		if (bat_pack.spi_error_counters[ic] > SPI_ERROR_LIMIT) {
 			bat_pack.status |= SPI_FAULT;
-			bat_pack.spi_fault_addresses |= 1u << ic;
+			bat_pack.spi_fault_addresses |= 0x01 << ic;
 		}
 	}
 }
 
-void update_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+void update_voltages(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	int16_t cell_voltages[N_OF_ADBMS][CELLS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
@@ -119,7 +124,7 @@ void update_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
 	}
 }
 
-void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	int16_t cell_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
@@ -152,9 +157,9 @@ void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
  * ADBMS6830's open wire detection functionality (FUSE_BLOWN/OPEN_WIRE)
  *
  * See Cell Discharge With Cell Measurements and Cell Diagnostics section of datasheet
- * for implementation details
+ * for high-level implementation explanation
  */
-void cell_disconnect_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	int16_t baseline_voltages[N_OF_ADBMS][CELLS_PER_ADBMS]; // voltages from S-ADCs with open-wire switches closed
 	int16_t even_open_wire_voltages[N_OF_ADBMS][CELLS_PER_ADBMS]; // voltages from S-ADCs with even-channel open-wire switches open
 	int16_t odd_open_wire_voltages[N_OF_ADBMS][CELLS_PER_ADBMS]; // voltages from S-ADCS with odd-channel open-wire switches open
@@ -184,8 +189,8 @@ void cell_disconnect_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_
 		// Update bat_pack if no SPI error
 		if (!spi_errors[ic]) {
 			for (uint8_t cell = 0; cell < CELLS_PER_ADBMS; cell++) {
-				double open_wire_voltage;
-				double baseline_voltage = (baseline_voltages[ic][cell] * 0.00015) + 1.5;
+				float open_wire_voltage = 0;
+				float baseline_voltage = (baseline_voltages[ic][cell] * 0.00015) + 1.5;
 				uint8_t subpack = ic / IC_PER_SUBPACK;
 				uint8_t subpack_cell_num = ((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell;
 
@@ -197,15 +202,17 @@ void cell_disconnect_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_
 				}
 
 				bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] += mismatch_flags[ic][cell];
-				if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] > ERROR_VOLTAGE_LIMIT) {
+				if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL]
+					> ERROR_VOLTAGE_LIMIT) {
 					bat_pack.status |= MISMATCH;
 				}
 
-				double percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
+				float percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
 				if (percent_difference < 0) percent_difference = -percent_difference;
 				if (percent_difference > 0.1) {
 					bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]++;
-					if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN] > ERROR_VOLTAGE_LIMIT) {
+					if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]
+						> ERROR_VOLTAGE_LIMIT) {
 						bat_pack.status |= OPEN_WIRE;
 					}
 				}
@@ -215,16 +222,19 @@ void cell_disconnect_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_
 }
 
 void process_voltages() {
-	double max_voltage = -4; // Smallest voltage that can be read by ADC is -3.4152 V
-	int16_t max_voltage_raw;
-	double min_voltage = 7; // Largest voltage that can be read by ADC is 6.41505 V
-	int16_t min_voltage_raw;
-	double total_voltage = 0;
+	const float OVER_VOLTAGE = 4.2f; // 4.2 V
+	const float UNDER_VOLTAGE = 2.5f; // 2.5 V
+
+	float max_voltage = -4; // Smallest voltage that can be read by ADC is -3.4152 V
+	int16_t max_voltage_raw = 0;
+	float min_voltage = 7; // Largest voltage that can be read by ADC is 6.41505 V
+	int16_t min_voltage_raw = 0;
+	float total_voltage = 0;
 
 	// Check each cell
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 		for (uint8_t cell = 0; cell < CELLS_PER_SUBPACK; cell++) {
-			double voltage = get_voltage(subpack, cell);
+			float voltage = get_voltage(subpack, cell);
 
 			if (max_voltage < voltage) {
 				max_voltage = voltage;
@@ -238,13 +248,15 @@ void process_voltages() {
 
 			if (voltage > OVER_VOLTAGE) {
 				bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT]++;
-				if (bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT] > ERROR_VOLTAGE_LIMIT) {
+				if (bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT]
+					> ERROR_VOLTAGE_LIMIT) {
 					bat_pack.status |= CELL_VOLT_OVER;
 				}
 			}
 			else if (voltage < UNDER_VOLTAGE) {
 				bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT]++;
-				if (bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT] > ERROR_VOLTAGE_LIMIT) {
+				if (bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT]
+					> ERROR_VOLTAGE_LIMIT) {
 					bat_pack.status |= CELL_VOLT_UNDER;
 				}
 			}
@@ -259,16 +271,21 @@ void process_voltages() {
 }
 
 void process_temps() {
-	double avg_temp_c = 0;
-	double max_temp_c = -TEMP_IGNORE_LIMIT;
-	int16_t max_temp_raw;
-	double min_temp_c = TEMP_IGNORE_LIMIT;
+	const float OVER_TEMP = 60.0f; // 60 C
+	const float UNDER_TEMP = 0.0f; // 0 C
+
+	const float TEMP_IGNORE_LIMIT = 500.0f; // Ignore temps over this value, probably a bad thermistor
+
+	float avg_temp_c = 0;
+	float max_temp_c = -TEMP_IGNORE_LIMIT;
+	int16_t max_temp_raw = 0;
+	float min_temp_c = TEMP_IGNORE_LIMIT;
 	uint8_t num_bad_temp = 0;
 
 	// Check each cell temp
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 		for (uint8_t temp = 0; temp < CELL_TEMPS_PER_SUBPACK; temp++) {
-			double temp_c = get_cell_temp(subpack, temp);
+			float temp_c = get_cell_temp(subpack, temp);
 
 			if (temp_c < TEMP_IGNORE_LIMIT) {
 				if (max_temp_c < temp_c) {
@@ -285,13 +302,15 @@ void process_temps() {
 
 				if (temp_c > OVER_TEMP) {
 					bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[OVERTEMP]++;
-					if (bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[OVERTEMP] > ERROR_TEMPERATURE_LIMIT) {
+					if (bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[OVERTEMP]
+					    > ERROR_TEMPERATURE_LIMIT) {
 						bat_pack.status |= PACK_TEMP_OVER;
 					}
 				}
 				else if (temp_c < UNDER_TEMP) {
 					bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP]++;
-					if (bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP] > ERROR_TEMPERATURE_LIMIT) {
+					if (bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP]
+					    > ERROR_TEMPERATURE_LIMIT) {
 						bat_pack.status |= PACK_TEMP_UNDER;
 					}
 				}
@@ -314,23 +333,25 @@ void process_temps() {
 }
 
 // Make sure no cells will discharge
-void disable_cell_balancing(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
+void disable_cell_balancing(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	ADBMS6830_reset_discharge();
 	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 }
 
 // Update ICs to discharge cells that are too far above the lowest voltage in the pack
-void balance_cells(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr) {
-	double target_voltage = bat_pack.LO_voltage;
+void balance_cells(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
+	const float BALANCE_THRESHOLD = 0.02f; // Balance to within 20 mV
+
+	float target_voltage = bat_pack.LO_voltage;
 
 	ADBMS6830_reset_discharge(); // clear previous discharges
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		for (uint8_t cell = 0; cell < CELLS_PER_ADBMS; cell++) {
-			double voltage = get_voltage(ic / IC_PER_SUBPACK,
-										 ((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell
-										 );
-			double difference = voltage - target_voltage;
+			float voltage = get_voltage(ic / IC_PER_SUBPACK,
+										((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell
+										);
+			float difference = voltage - target_voltage;
 			if (difference > BALANCE_THRESHOLD) ADBMS6830_set_discharge(ic, cell); // discharge cell
 		}
 	}

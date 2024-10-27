@@ -13,20 +13,6 @@
 
 #include "data.h"
 
-#define ERROR_VOLTAGE_LIMIT 4u
-#define ERROR_TEMPERATURE_LIMIT 4u
-#define SPI_ERROR_LIMIT 100u
-
-#define OVER_VOLTAGE 4.2 // 4.2 V
-#define UNDER_VOLTAGE 2.5 // 2.5 V
-
-#define OVER_TEMP 60 // 60 C
-#define UNDER_TEMP 0 // 0 C
-
-#define BALANCE_THRESHOLD 0.02 // Balance to within 20 mV
-
-#define TEMP_IGNORE_LIMIT 500 // Ignore temps over this value, probably a bad thermistor
-
 // BMS Status Macros
 #define NO_ERROR 0x00
 #define CHARGEMODE 0x01
@@ -38,15 +24,13 @@
 #define MISMATCH 0x40
 #define SPI_FAULT 0x80
 
-// Cell Error Macros
-#define OVERVOLT 0
-#define UNDERVOLT 1
-#define FUSE_BLOWN 2
-#define RD_FAIL 3
+enum CellErrorType_t {
+	OVERVOLT, UNDERVOLT, FUSE_BLOWN, RD_FAIL
+};
 
-// Temp Error Macros
-#define OVERTEMP 0
-#define UNDERTEMP 1
+enum TempErrorType_t {
+	OVERTEMP, UNDERTEMP
+};
 
 typedef enum {
 	BMS_FAULT, BMS_NORMAL
@@ -54,13 +38,13 @@ typedef enum {
 
 typedef struct {
 	int16_t voltage_raw;
-	double voltage;
+	float voltage;
 	uint8_t bad_counters[4];
 } BAT_CELL_t;
 
 typedef struct {
 	int16_t temp_raw;
-	double temp_c;
+	float temp_c;
 	uint8_t bad_counters[2];
 } BAT_TEMP_t;
 
@@ -73,14 +57,14 @@ typedef struct {
 	BAT_SUBPACK_t subpacks[N_OF_SUBPACK];
 
 	int16_t total_voltage_raw;
-	double total_voltage;
+	float total_voltage;
 	int16_t HI_voltage_raw;
 	int16_t LO_voltage_raw;
-	double LO_voltage;
+	float LO_voltage;
 
 	uint16_t current_ref_raw;
 	uint16_t current_raw;
-	double current;
+	float current;
 
 	int16_t HI_temp_raw;
 	uint8_t HI_temp_c;
@@ -95,26 +79,26 @@ typedef struct {
 	uint8_t spi_error_counters[N_OF_ADBMS]; // Stores the number of SPI communication errors for each IC
 } BAT_PACK_t;
 
-void cell_interface_init(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void cell_interface_init(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 
 void set_voltage(uint8_t subpack_num, uint8_t cell_num, int16_t voltage_raw);
-double get_voltage(uint8_t subpack_num, uint8_t cell_num);
+float get_voltage(uint8_t subpack_num, uint8_t cell_num);
 int16_t get_voltage_raw(uint8_t subpack_num, uint8_t cell_num);
 
 void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw);
-double get_cell_temp(uint8_t subpack_num, uint8_t temp_num);
+float get_cell_temp(uint8_t subpack_num, uint8_t temp_num);
 int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num);
 
-void update_voltages(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
-void update_temps(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void update_voltages(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
+void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 
-void cell_disconnect_check(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 
 void process_voltages();
 void process_temps();
 
-void disable_cell_balancing(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
-void balance_cells(SPI_HandleTypeDef* hspi_ptr, TIM_HandleTypeDef* htim_ptr);
+void disable_cell_balancing(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
+void balance_cells(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 
 uint8_t get_max_fault_ic_addr();
 BMS_MODE_t bat_health_check();

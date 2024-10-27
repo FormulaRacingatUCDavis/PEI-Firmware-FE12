@@ -7,36 +7,35 @@
 
 
 #include "main.h"
+#include "cell_interface.h"
 #include "fsm.h"
 #include "can_manager.h"
 
 extern uint8_t pei_status;
 
 // BMS variables
-extern BAT_PACK_t bat_pack;
+extern volatile BAT_PACK_t bat_pack;
 
 // Motor controller variables
-extern int16_t mc_voltage;
-extern uint8_t mc_vsm_state;
-extern uint8_t mc_discharge_state;
-extern uint32_t mc_post_faults;
-extern uint32_t mc_run_faults;
+extern volatile int16_t mc_voltage;
+extern volatile uint8_t mc_vsm_state;
+extern volatile uint8_t mc_discharge_state;
+extern volatile uint32_t mc_post_faults;
+extern volatile uint32_t mc_run_faults;
 
 // VCU variables
-extern uint8_t vcu_state;
-extern uint8_t hv_requested;
-extern uint8_t vcu_attached;
+extern volatile uint8_t vcu_state;
+extern volatile uint8_t hv_requested;
+extern volatile uint8_t vcu_attached;
 
 // Charger variables
-extern uint8_t charger_attached;
-extern uint8_t charger_status;
+extern volatile uint8_t charger_attached;
+extern volatile uint8_t charger_status;
 
 // Tick counters
-extern uint32_t ticks_since_vcu_message;
-extern uint32_t ticks_since_mc_message;
-extern uint32_t ticks_since_charger_message;
-
-uint8_t hv_lockout = 1;
+extern volatile uint32_t ticks_since_vcu_message;
+extern volatile uint32_t ticks_since_mc_message;
+extern volatile uint32_t ticks_since_charger_message;
 
 uint8_t hv_request() {
 	if (vcu_attached) return hv_requested;
@@ -46,6 +45,8 @@ uint8_t hv_request() {
 }
 
 uint8_t hv_allowed() {
+	static uint8_t hv_lockout = 1;
+
 	if (hv_lockout) {
 		if (!hv_request()) hv_lockout = 0; // make sure we cannot go directly to HV
 		return 0;
@@ -78,19 +79,21 @@ uint8_t precharge_ready() {
 }
 
 uint8_t precharge_complete() {
-	return 0;
-}
-
-uint8_t precharge_complete() {
     uint16_t threshold = (uint16_t)((bat_pack.total_voltage * 10) * 0.9);
     return mc_voltage > threshold;
 }
 
-void add_status(uint8_t status) {
+static void add_status(uint8_t status) {
     pei_status |= status;
 }
 
 void update_status() {
+	const uint16_t MC_HW_GATE_POST_FAULT = 0x0001;
+	const uint16_t MC_HW_GATE_RUN_FAULT = 0x0100;
+
+	const uint8_t VCU_SHUTDOWN_OPEN = 0x87;
+	const uint8_t VCU_MC_FAULT = 0x8A;
+
 	pei_status = NORMAL; // reset
 
 	if (vcu_attached) {

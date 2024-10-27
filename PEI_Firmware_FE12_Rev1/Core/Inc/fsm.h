@@ -57,12 +57,6 @@ typedef enum {
 #define SHUTDOWN 0x40
 #define MC_DISCHARGING 0x80
 
-#define MC_HW_GATE_POST_FAULT 0x0001
-#define MC_HW_GATE_RUN_FAULT 0x0100
-
-#define VCU_SHUTDOWN_OPEN 0x87
-#define VCU_MC_FAULT 0x8A
-
 uint8_t hv_request();
 uint8_t hv_allowed();
 uint8_t precharge_ready();
