@@ -49,6 +49,8 @@ extern "C" {
 
 /* USER CODE END EM */
 
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
@@ -57,8 +59,14 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define Wake_6822_Pin GPIO_PIN_2
+#define Wake_6822_GPIO_Port GPIOE
+#define Wake2_6822_Pin GPIO_PIN_3
+#define Wake2_6822_GPIO_Port GPIOE
 #define LCD_RS_Pin GPIO_PIN_0
 #define LCD_RS_GPIO_Port GPIOF
+#define SPI5_CS2_Pin GPIO_PIN_5
+#define SPI5_CS2_GPIO_Port GPIOF
 #define SPI5_CS_Pin GPIO_PIN_6
 #define SPI5_CS_GPIO_Port GPIOF
 #define Heartbeat_Pin GPIO_PIN_3
