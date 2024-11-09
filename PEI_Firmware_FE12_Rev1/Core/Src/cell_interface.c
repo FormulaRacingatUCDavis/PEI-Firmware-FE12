@@ -10,6 +10,7 @@
 
 #include "cell_interface.h"
 #include "ADBMS6830.h"
+#include "main.h"
 
 static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
@@ -128,7 +129,9 @@ void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const ht
 	int16_t cell_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_adax(hspi_ptr, htim_ptr); // run ADC conversion
 
 	ADBMS6830_rdaux_raw_temp_voltages(hspi_ptr, htim_ptr, cell_temps, spi_errors);
@@ -166,7 +169,9 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 	uint8_t mismatch_flags[N_OF_ADBMS][CELLS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_set_S_ADC(1, 0, 0, CELL_OW_DISABLED); // DCP = 0, CONT = 1, OW = 0
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 	HAL_Delay(8);
@@ -176,12 +181,22 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 
 	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, baseline_voltages, spi_errors);
 
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_set_S_ADC(0, 0, 0, CELL_OW_CH_EVEN); // DCP = 0, CONT = 0, OW = 1
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
+
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, even_open_wire_voltages, spi_errors);
 
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_set_S_ADC(0, 0, 0, CELL_OW_CH_ODD); // DCP = 0, CONT = 0, OW = 2
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
+
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, odd_open_wire_voltages, spi_errors);
 
 	// Check each cell
@@ -335,6 +350,10 @@ void process_temps() {
 // Make sure no cells will discharge
 void disable_cell_balancing(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	ADBMS6830_reset_discharge();
+
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 }
 
@@ -356,6 +375,9 @@ void balance_cells(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const h
 		}
 	}
 
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 }
 

@@ -527,11 +527,15 @@ void ADBMS6830_rdfc_all(SPI_HandleTypeDef* const hspi_ptr,             // Pointe
 	const uint8_t CELL_IN_REG = 3u; // 6 bytes per register / 2 bytes per cell = 3 cell voltages per register
 
 	// Freeze all result registers for data coherence
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 4; reg++) {
-		if (reg != 0) ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		}
 
 		uint8_t data[N_OF_ADBMS][6];
 		ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
@@ -548,7 +552,9 @@ void ADBMS6830_rdfc_all(SPI_HandleTypeDef* const hspi_ptr,             // Pointe
 		}
 	}
 
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
 }
 
@@ -603,11 +609,15 @@ void ADBMS6830_rdsv_all(SPI_HandleTypeDef* const hspi_ptr,               // Poin
 	const uint8_t CELL_IN_REG = 3u; // 6 bytes per register / 2 bytes per cell = 3 cell voltages per register
 
 	// Freeze all result registers for data coherence
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 4; reg++) {
-		if (reg != 0) ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		}
 
 		uint8_t data[N_OF_ADBMS][6];
 		ADBMS6830_rdsv_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
@@ -624,7 +634,9 @@ void ADBMS6830_rdsv_all(SPI_HandleTypeDef* const hspi_ptr,               // Poin
 		}
 	}
 
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
 }
 
@@ -747,11 +759,15 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* const hspi_ptr,       
 	const uint8_t TEMP_IN_REG = 3u; // 6 register bytes / 2 bytes per voltage = 3 temp voltages per register
 
 	// Freeze all result registers for data coherence
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 3; reg++) {
-		if (reg != 0) ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		}
 
 		uint8_t data[N_OF_ADBMS][6];
 		ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
@@ -769,7 +785,9 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* const hspi_ptr,       
 		}
 	}
 
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
 }
 
