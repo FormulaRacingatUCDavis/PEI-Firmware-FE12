@@ -45,12 +45,13 @@ static void set_tx_header_defaults(CAN_TxHeaderTypeDef* const tx_header_ptr) {
 }
 
 void can_send_PEI_Current(uint8_t shutdown_flags) {
+	const uint32_t PEI_CURRENT_MSG_ID = 0x387;
 	static uint32_t PEI_CURRENT_TX_MAILBOX;
 
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
-	tx_header.StdId = 0x387;
+	tx_header.StdId = PEI_CURRENT_MSG_ID;
 	tx_header.DLC = 5;
 
 	uint8_t tx_data[8];
@@ -64,13 +65,14 @@ void can_send_PEI_Current(uint8_t shutdown_flags) {
 }
 
 void can_send_Charger() {
+	const uint32_t PEI_CHARGER_TX_MSG_ID = 0x1806E5F4;
 	static uint32_t PEI_CHARGER_TX_MAILBOX;
 
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	tx_header.IDE = CAN_ID_EXT;
 	tx_header.RTR = CAN_RTR_DATA;
-	tx_header.ExtId = 0x1806E5F4;
+	tx_header.ExtId = PEI_CHARGER_TX_MSG_ID;
 	tx_header.DLC = 5;
 
 	uint8_t tx_data[8];
@@ -84,12 +86,13 @@ void can_send_Charger() {
 }
 
 void can_send_BMS_Status() {
+	const uint32_t BMS_STATUS_MSG_ID = 0x380;
 	static uint32_t BMS_STATUS_TX_MAILBOX;
 
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
-	tx_header.StdId = 0x380;
+	tx_header.StdId = BMS_STATUS_MSG_ID;
 	tx_header.DLC = 5;
 
 	uint8_t tx_data[8];
@@ -103,12 +106,13 @@ void can_send_BMS_Status() {
 }
 
 void can_send_BMS_Data() {
+	const uint32_t BMS_DATA_MSG_ID = 0x381;
 	static uint32_t BMS_DATA_TX_MAILBOX;
 
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
-	tx_header.StdId = 0x381;
+	tx_header.StdId = BMS_DATA_MSG_ID;
 	tx_header.DLC = 4;
 
 	uint8_t tx_data[8];
