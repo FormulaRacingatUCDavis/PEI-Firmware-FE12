@@ -54,6 +54,8 @@ static uint8_t tx_cfgb[N_OF_ADBMS][6]; // Stores CFGB data to be written to each
 static uint8_t tx_pwma[N_OF_ADBMS][6]; // Stores PWMA data to be written to each IC
 static uint8_t tx_pwmb[N_OF_ADBMS][6]; // Stores PWMB data to be written to each IC
 
+extern int8_t comm_bk_id;
+
 /*
  \brief Calculates and returns the CRC10 of a given register group
 
@@ -152,47 +154,121 @@ static void spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to the SPI h
 					  uint8_t data[N_OF_ADBMS][6]        // 2D array storing data bytes for each IC (can be set to NULL if not a write command)
 				      )
 {
-	// Data prep (putting everything into a single array + PEC calculations)
+	if (comm_bk_id == -1) {
+		uint8_t tx_len = 4; // 2 command bytes + 2 PEC bytes
+		if (data != NULL) tx_len += N_OF_ADBMS * 8; // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
+		uint8_t tx_data[tx_len];
 
-	uint8_t tx_len = 4; // 2 command bytes + 2 PEC bytes
-	if (data != NULL) tx_len += N_OF_ADBMS * 8; // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
-	uint8_t tx_data[tx_len];
+		tx_data[0] = cmd[0];
+		tx_data[1] = cmd[1];
 
-	tx_data[0] = cmd[0];
-	tx_data[1] = cmd[1];
+		uint16_t cmd_pec = cmd_pec_calc(cmd);
+		tx_data[2] = HI8(cmd_pec);
+		tx_data[3] = LO8(cmd_pec);
 
-	uint16_t cmd_pec = cmd_pec_calc(cmd);
-	tx_data[2] = HI8(cmd_pec);
-	tx_data[3] = LO8(cmd_pec);
+		if (data != NULL) {
+			uint8_t idx = 4;
 
-	if (data != NULL) {
-		uint8_t idx = 4;
+			// Data written to last IC in the chain first and first IC in the chain last (see bus protocols in datasheet)
+			for (uint8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) {
+				uint16_t data_pec;
 
-		for (uint8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) { // Data written to last IC in the chain first and first IC in the chain last (see bus protocols in datasheet)
+				for (uint8_t i = 0; i < 6; i++) {
+					tx_data[idx] = data[ic][i];
+					idx++;
+				}
+
+				data_pec = data_pec_calc(data[ic]);
+				tx_data[idx] = HI8(data_pec);
+				tx_data[idx + 1] = LO8(data_pec);
+				idx += 2;
+			}
+		}
+
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+		delay_500_ns(htim_ptr);
+
+		HAL_SPI_Transmit(hspi_ptr, tx_data, tx_len, 100);
+		delay_500_ns(htim_ptr);
+
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+		delay_us(htim_ptr, 2);
+	}
+	else {
+		uint8_t tx_len_fwd = 4; // 2 command bytes + 2 PEC bytes
+		uint8_t tx_len_rev = 4;
+
+		if (data != NULL) {
+			tx_len_fwd += (comm_bk_id + 1) * 8; // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
+			tx_len_rev += (N_OF_ADBMS - comm_bk_id - 1) * 8;
+		}
+		uint8_t tx_data_fwd[tx_len_fwd];
+		uint8_t tx_data_rev[tx_len_rev];
+
+		tx_data_fwd[0] = cmd[0];
+		tx_data_fwd[1] = cmd[1];
+
+		tx_data_rev[0] = cmd[0];
+		tx_data_rev[1] = cmd[1];
+
+		uint16_t cmd_pec = cmd_pec_calc(cmd);
+
+		tx_data_fwd[2] = HI8(cmd_pec);
+		tx_data_fwd[3] = LO8(cmd_pec);
+
+		tx_data_rev[2] = HI8(cmd_pec);
+		tx_data_rev[3] = LO8(cmd_pec);
+
+		if (data != NULL) {
 			uint16_t data_pec;
+			uint8_t idx = 4;
 
-			for (uint8_t i = 0; i < 6; i++) {
-				tx_data[idx] = data[ic][i];
-				idx++;
+			// Data packaging in the forward direction
+			for (uint8_t ic = comm_bk_id; ic >= 0; ic--) {
+				for (uint8_t i = 0; i < 6; i++) {
+					tx_data_fwd[idx] = data[ic][i];
+					idx++;
+				}
+
+				data_pec = data_pec_calc(data[ic]);
+				tx_data_fwd[idx] = HI8(data_pec);
+				tx_data_fwd[idx + 1] = LO8(data_pec);
+				idx += 2;
 			}
 
-			data_pec = data_pec_calc(data[ic]);
-			tx_data[idx] = HI8(data_pec);
-			tx_data[idx + 1] = LO8(data_pec);
-			idx += 2;
+			idx = 4; // reset index counter
+
+			// Data packaging in the reverse direction
+			for (uint8_t ic = comm_bk_id + 1; ic < N_OF_ADBMS; ic++) {
+				for (uint8_t i = 0; i < 6; i++) {
+					tx_data_rev[idx] = data[ic][i];
+					idx++;
+				}
+
+				data_pec = data_pec_calc(data[ic]);
+				tx_data_rev[idx] = HI8(data_pec);
+				tx_data_rev[idx] = LO8(data_pec);
+				idx += 2;
+			}
 		}
+
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+		delay_500_ns(htim_ptr);
+
+		HAL_SPI_Transmit(hspi_ptr, tx_data_fwd, tx_len_fwd, 100);
+		delay_500_ns(htim_ptr);
+
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+
+		HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_RESET);
+		delay_500_ns(htim_ptr);
+
+		HAL_SPI_Transmit(hspi_ptr, tx_data_rev, tx_len_rev, 100);
+		delay_500_ns(htim_ptr);
+
+		HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_SET);
+		delay_us(htim_ptr, 1);
 	}
-
-	// Data transmission
-
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
-	delay_500_ns(htim_ptr);
-
-	HAL_SPI_Transmit(hspi_ptr, tx_data, tx_len, 100);
-	delay_500_ns(htim_ptr);
-
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-	delay_us(htim_ptr, 2);
 }
 
 
@@ -215,8 +291,6 @@ static uint8_t spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Pointer to t
 							  uint8_t pec_mismatches[N_OF_ADBMS] // Input: Array containing flags indicating which nodes had PEC mismatches
 					   	   	  )
 {
-	uint8_t rx_len = N_OF_ADBMS * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
-	uint8_t rx_data_flattened[rx_len]; // array to store data from all ICs
 	uint8_t tx_data[4];
 	uint8_t no_errors = 1;
 
@@ -227,37 +301,110 @@ static uint8_t spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Pointer to t
 	tx_data[2] = HI8(cmd_pec);
 	tx_data[3] = LO8(cmd_pec);
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
-	delay_500_ns(htim_ptr);
+	if (comm_bk_id == -1) {
+		uint8_t rx_len = N_OF_ADBMS * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
+		uint8_t rx_data_flattened[rx_len]; // array to store data from all ICs
 
-	HAL_SPI_Transmit(hspi_ptr, tx_data, 4, 100);
-	HAL_SPI_Receive(hspi_ptr, rx_data_flattened, rx_len, 100);
-	delay_500_ns(htim_ptr);
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+		delay_500_ns(htim_ptr);
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-	delay_us(htim_ptr, 2);
+		HAL_SPI_Transmit(hspi_ptr, tx_data, 4, 100);
+		HAL_SPI_Receive(hspi_ptr, rx_data_flattened, rx_len, 100);
+		delay_500_ns(htim_ptr);
 
-	// Package data (excluding PEC) into 2D array and process PECs
-	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) { // Data read from first IC in the chain first and last IC in the chain last (see bus protocols in datasheet)
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+		delay_us(htim_ptr, 2);
 
-		for (uint8_t i = 0; i < 6; i++) {
-			rx_data[ic][i] = rx_data_flattened[(ic * 8) + i];
+		// Package data (excluding PEC) into 2D array and process PECs
+		// Data read from first IC in the chain first and last IC in the chain last (see bus protocols in datasheet)
+		for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+			for (uint8_t i = 0; i < 6; i++) {
+				rx_data[ic][i] = rx_data_flattened[(ic * 8) + i];
+			}
+
+			uint16_t data_pec = data_pec_calc(rx_data[ic]);
+			uint16_t received_pec = rx_data_flattened[(ic * 8) + 6] << 8;
+			received_pec += rx_data_flattened[(ic * 8) + 7];
+
+			if (data_pec != received_pec) {
+				no_errors = 0;
+				pec_mismatches[ic] = 1;
+			}
+			else {
+				pec_mismatches[ic] = 0;
+			}
 		}
 
-		uint16_t data_pec = data_pec_calc(rx_data[ic]);
-		uint16_t received_pec = rx_data_flattened[(ic * 8) + 6] << 8;
-		received_pec += rx_data_flattened[(ic * 8) + 7];
-
-		if (data_pec != received_pec) {
-			no_errors = 0;
-			pec_mismatches[ic] = 1;
-		}
-		else {
-			pec_mismatches[ic] = 0;
-		}
+		return no_errors;
 	}
+	else {
+		uint8_t rx_len_fwd = (comm_bk_id + 1) * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
+		uint8_t rx_len_rev = (N_OF_ADBMS - comm_bk_id - 1) * 8;
 
-	return no_errors;
+		// Arrays to story data from all ICs
+		uint8_t rx_data_flattened_fwd[rx_len_fwd];
+		uint8_t rx_data_flattened_rev[rx_len_rev];
+
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+		delay_500_ns(htim_ptr);
+
+		HAL_SPI_Transmit(hspi_ptr, tx_data, 4, 100);
+		HAL_SPI_Receive(hspi_ptr, rx_data_flattened_fwd, rx_len_fwd, 100);
+		delay_500_ns(htim_ptr);
+
+		HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+
+		HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_RESET);
+		delay_500_ns(htim_ptr);
+
+		HAL_SPI_Transmit(hspi_ptr, tx_data, 4, 100);
+		HAL_SPI_Receive(hspi_ptr, rx_data_flattened_rev, rx_len_rev, 100);
+		delay_500_ns(htim_ptr);
+
+		HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI_CS2_Pin, GPIO_PIN_SET);
+		delay_us(htim_ptr, 1);
+
+		// Package data (excluding PEC) into 2D array and process PECs
+
+		for (uint8_t ic = 0; ic < comm_bk_id; ic++) {
+			for (uint8_t i = 0; i < 6; i++) {
+				rx_data[ic][i] = rx_data_flattened_fwd[(ic * 8) + i];
+			}
+
+			uint16_t data_pec = data_pec_calc(rx_data[ic]);
+			uint16_t received_pec = rx_data_flattened_fwd[(ic * 8) + 6] << 8;
+			received_pec += rx_data_flattened_fwd[(ic * 8) + 7];
+
+			if (data_pec != received_pec) {
+				no_errors = 0;
+				pec_mismatches[ic] = 1;
+			}
+			else {
+				pec_mismatches[ic] = 0;
+			}
+		}
+
+		uint8_t packet = 0;
+		for (uint8_t ic = N_OF_ADBMS - 1; ic > comm_bk_id; ic--, packet++) {
+			for (uint8_t i = 0; i < 6; i++) {
+				rx_data[ic][i] = rx_data_flattened_rev[(packet * 8) + i];
+			}
+
+			uint16_t data_pec = data_pec_calc(rx_data[ic]);
+			uint16_t received_pec = rx_data_flattened_rev[(packet * 8) + 6] << 8;
+			received_pec += rx_data_flattened_rev[(packet * 8) + 7];
+
+			if (data_pec != received_pec) {
+				no_errors = 0;
+				pec_mismatches[ic] = 1;
+			}
+			else {
+				pec_mismatches[ic] = 0;
+			}
+		}
+
+		return no_errors;
+	}
 }
 
 // Set default configs
@@ -402,6 +549,11 @@ void ADBMS6830_reset_discharge() {
 	}
 }
 
+void ADBMS6830_enable_comm_bk() {
+	tx_cfga[comm_bk_id][5] |= 0x08;
+	tx_cfga[comm_bk_id + 1][5] |= 0x08;
+}
+
 void ADBMS6830_wakeup(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	// Send dummy RCFGA command to wake up ICs
 
@@ -461,7 +613,7 @@ static void ADBMS6830_freeze_results(SPI_HandleTypeDef* const hspi_ptr,
 									 )
 {
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-		tx_cfga[ic][5] = CFGA5 + 0x20; // turn on snapshot bit
+		tx_cfga[ic][5] |= 0x20; // turn on snapshot bit
 	}
 	ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
 }
@@ -472,7 +624,7 @@ static void ADBMS6830_unfreeze_results(SPI_HandleTypeDef* const hspi_ptr,
 									   )
 {
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-		tx_cfga[ic][5] = CFGA5; // reset config to default
+		tx_cfga[ic][5] &= ~0x20; // turn off snapshot bit
 	}
 	ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
 }

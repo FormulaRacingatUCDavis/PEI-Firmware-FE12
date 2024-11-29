@@ -117,6 +117,10 @@ static void update_current();
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 static void BMS_Init() {
+	// Pull SPI chip selects high (chip select is active low)
+	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_SET);
+
 	cell_interface_init(&hspi5, &htim10);
 	init_SOC_vars();
 }

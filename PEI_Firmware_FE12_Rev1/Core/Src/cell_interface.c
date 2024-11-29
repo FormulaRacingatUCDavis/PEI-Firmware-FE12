@@ -16,6 +16,8 @@ static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
 static const uint8_t SPI_ERROR_LIMIT = 100u;
 
+int8_t comm_bk_id = -1;
+
 volatile BAT_PACK_t bat_pack;
 
 static void pack_init() {
@@ -95,12 +97,51 @@ int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num) {
 	return bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw;
 }
 
-static void update_spi_errors(uint8_t spi_errors[N_OF_ADBMS]) {
+static void update_spi_errors(SPI_HandleTypeDef* const hspi_ptr,
+							  TIM_HandleTypeDef* const htim_ptr,
+							  uint8_t spi_errors[N_OF_ADBMS]) {
+	static uint8_t comm_bk_present = 0;
+	static uint8_t comm_bk_enabled = 0;
+
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		bat_pack.spi_error_counters[ic] += spi_errors[ic];
 		if (bat_pack.spi_error_counters[ic] > SPI_ERROR_LIMIT) {
 			bat_pack.status |= SPI_FAULT;
 			bat_pack.spi_fault_addresses |= 0x01 << ic;
+		}
+
+		/*
+		 * Communication break is present if there is a string
+		 * of PEC mismatches until the end of the chain.
+		 *
+		 * We don't want to change the communication break status
+		 * if a communication break was identified in a previous call.
+		 *
+		 * Note: the comm_bk_present flag will also be true if there is a PEC
+		 * mismatch on the last node. This might not necessarily mean
+		 * a communication break, but it might be worth trying to reach
+		 * it from the other end of the chain anyways.
+		 */
+		if (!comm_bk_enabled) {
+			comm_bk_present = spi_errors[ic];
+
+			/*
+			 * If there is a communication break, then we want to halt transmission
+			 * on the last node before the communication break.
+			 */
+			if ((ic > 0)) {
+				if (comm_bk_present && !spi_errors[ic - 1]) comm_bk_id = ic - 1;
+				if (!comm_bk_present && spi_errors[ic - 1]) comm_bk_id = -1;
+			}
+		}
+	}
+
+	if (comm_bk_present) {
+		if (!comm_bk_enabled) {
+			ADBMS6830_enable_comm_bk();
+			ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
+
+			comm_bk_enabled = 1;
 		}
 	}
 }

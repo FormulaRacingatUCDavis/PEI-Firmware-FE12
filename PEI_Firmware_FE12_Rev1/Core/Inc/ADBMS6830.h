@@ -103,6 +103,8 @@ void ADBMS6830_set_Aux_ADC(uint8_t OW, uint8_t PUP, uint8_t CH);
 void ADBMS6830_set_discharge(uint8_t ic_num, uint8_t cell_num);
 void ADBMS6830_reset_discharge();
 
+void ADBMS6830_enable_comm_bk();
+
 void ADBMS6830_wakeup(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 void ADBMS6830_wrcfga(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 void ADBMS6830_wrcfgb(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
