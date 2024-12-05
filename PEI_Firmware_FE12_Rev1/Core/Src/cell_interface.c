@@ -10,6 +10,7 @@
 
 #include "cell_interface.h"
 #include "ADBMS6830.h"
+#include "utils.h"
 #include "main.h"
 
 static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
@@ -146,12 +147,27 @@ static void update_spi_errors(SPI_HandleTypeDef* const hspi_ptr,
 	}
 }
 
+// Takes an array of SPI error arrays and ORs them into one SPI error array
+static void aggregate_spi_errors(uint8_t spi_error_matrix[4][N_OF_ADBMS],
+								 uint8_t spi_errors[N_OF_ADBMS]
+								 ) {
+	for (uint8_t i = 0; i < N_OF_ADBMS; i++) {
+		uint8_t result = 0;
+		for (uint8_t j = 0; j < 4; j++) {
+			result = result || spi_error_matrix[j][i];
+			if (result) break;
+		}
+
+		spi_errors[i] = result;
+	}
+}
+
 void update_voltages(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	int16_t cell_voltages[N_OF_ADBMS][CELLS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
 	ADBMS6830_rdfc_all(hspi_ptr, htim_ptr, cell_voltages, spi_errors);
-	update_spi_errors(spi_errors);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		// Move voltages into bat_pack if no SPI error
@@ -170,13 +186,15 @@ void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const ht
 	int16_t cell_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
-	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+	// Wake up ICs if necessary
+	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	}
+
 	ADBMS6830_adax(hspi_ptr, htim_ptr); // run ADC conversion
 
 	ADBMS6830_rdaux_raw_temp_voltages(hspi_ptr, htim_ptr, cell_temps, spi_errors);
-	update_spi_errors(spi_errors);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		// Move temps into bat_pack if no SPI error
@@ -209,36 +227,51 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 	int16_t odd_open_wire_voltages[N_OF_ADBMS][CELLS_PER_ADBMS]; // voltages from S-ADCS with odd-channel open-wire switches open
 	uint8_t mismatch_flags[N_OF_ADBMS][CELLS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
+	uint8_t spi_error_matrix[4][N_OF_ADBMS];
 
-	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+	// Wake up ICs if necessary
+	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	}
+
 	ADBMS6830_set_S_ADC(1, 0, 0, CELL_OW_DISABLED); // DCP = 0, CONT = 1, OW = 0
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 	HAL_Delay(8);
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	ADBMS6830_rdstatc_mismatch(hspi_ptr, htim_ptr, mismatch_flags, spi_errors);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
+	copy_array_into(spi_error_matrix[0], spi_errors, N_OF_ADBMS);
 
 	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, baseline_voltages, spi_errors);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
+	copy_array_into(spi_error_matrix[1], spi_errors, N_OF_ADBMS);
 
-	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	}
+
 	ADBMS6830_set_S_ADC(0, 0, 0, CELL_OW_CH_EVEN); // DCP = 0, CONT = 0, OW = 1
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, even_open_wire_voltages, spi_errors);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
+	copy_array_into(spi_error_matrix[2], spi_errors, N_OF_ADBMS);
 
-	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	}
+
 	ADBMS6830_set_S_ADC(0, 0, 0, CELL_OW_CH_ODD); // DCP = 0, CONT = 0, OW = 2
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, odd_open_wire_voltages, spi_errors);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
+	copy_array_into(spi_error_matrix[3], spi_errors, N_OF_ADBMS);
+
+	aggregate_spi_errors(spi_error_matrix, spi_errors);
 
 	// Check each cell
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
@@ -392,9 +425,11 @@ void process_temps() {
 void disable_cell_balancing(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
 	ADBMS6830_reset_discharge();
 
-	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+	// Wake up ICs if necessary
+	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	}
+
 	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 }
 
@@ -416,9 +451,11 @@ void balance_cells(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const h
 		}
 	}
 
-	if (!HAL_GPIO_ReadPin(Wake_6822_GPIO_Port, Wake_6822_Pin)) {
+	// Wake up ICs if necessary
+	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	}
+
 	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 }
 

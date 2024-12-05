@@ -105,6 +105,8 @@ void ADBMS6830_reset_discharge();
 
 void ADBMS6830_enable_comm_bk();
 
+uint8_t ADBMS6830_wakeup_necessary();
+
 void ADBMS6830_wakeup(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 void ADBMS6830_wrcfga(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 void ADBMS6830_wrcfgb(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);

@@ -10,7 +10,7 @@
 #include "cell_interface.h"
 #include "charger.h"
 #include "fsm.h"
-#include "word_processing.h"
+#include "utils.h"
 
 extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef hcan2;
