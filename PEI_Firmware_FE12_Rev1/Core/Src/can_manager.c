@@ -103,7 +103,7 @@ void can_send_BMS_Status() {
 	tx_data[2] = HI8(bat_pack.spi_fault_addresses);
 	tx_data[3] = LO8(bat_pack.spi_fault_addresses);
 	tx_data[4] = get_max_fault_ic_addr();
-	tx_data[5] = comm_bk_id;
+	tx_data[5] = (uint8_t)comm_bk_id;
 
 	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_STATUS_TX_MAILBOX);
 }

@@ -28,6 +28,7 @@
 #include "can_manager.h"
 #include "charger.h"
 #include "SOC.h"
+#include "battery_gui.h"
 #include "relays.h"
 #include "LCD.h"
 #include "display.h"
@@ -86,6 +87,9 @@ volatile MC_DISCHARGE_STATE_t mc_discharge_state = DISCHARGE_DISABLED;
 volatile uint32_t mc_post_faults = 0;
 volatile uint32_t mc_run_faults = 0;
 
+// BMS parameters
+extern volatile BAT_PACK_t bat_pack;
+
 // Charger parameters
 extern volatile uint8_t charger_attached;
 extern uint8_t charge_control;
@@ -115,7 +119,7 @@ static void MX_TIM10_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 static void BMS_Init();
-static double raw_to_amps(uint16_t current_raw);
+static float raw_to_amps(uint16_t current_raw);
 static void update_current();
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc);
@@ -208,8 +212,6 @@ int main(void)
   LCD_Init(&htim10);
   BMS_Init();
 
-  int16_t current = 0;
-  int16_t currentRef = 0;
   uint8_t shutdown_flags = 0;
 
   BMS_MODE_t bms_status = BMS_NORMAL;
@@ -336,6 +338,8 @@ int main(void)
 	  can_send_PEI_Current(shutdown_flags);
 	  can_send_BMS_Status();
 	  can_send_BMS_Data();
+
+	  uart_send_GUI_Data(&huart3);
 
 	  HAL_IWDG_Refresh(&hiwdg);
     /* USER CODE END WHILE */
