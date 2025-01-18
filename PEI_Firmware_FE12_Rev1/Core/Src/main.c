@@ -93,7 +93,7 @@ extern volatile BAT_PACK_t bat_pack;
 // Charger parameters
 extern volatile uint8_t charger_attached;
 extern uint8_t charge_control;
-uint8_t charge_profile_received = 0;
+extern uint8_t charge_profile_received;
 
 // Tick counters
 volatile uint32_t ticks_since_vcu_message = 0;
@@ -313,7 +313,10 @@ int main(void)
 			  finish_precharge();
 
 			  charge_profile_received = uart_receive_charge_profile(&huart3);
-			  if (charger_attached && charge_profile_received) charge_control = CHARGE_START;
+			  if (charger_attached && charge_profile_received) {
+				  charge_control = CHARGE_START;
+				  update_max_charge_current();
+			  }
 
 			  if (!hv_request()) {
 				  pei_state = PEI_LV;

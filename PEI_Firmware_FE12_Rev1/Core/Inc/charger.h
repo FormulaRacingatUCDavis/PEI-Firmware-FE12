@@ -16,8 +16,10 @@
 #define CHARGE_START 0u
 
 typedef struct {
-	uint8_t charger_max_current;
+	uint16_t charger_max_current;
 	uint8_t attenuation_threshold;
 } Charge_Profile_t;
+
+void update_max_charge_current();
 
 #endif /* INC_CHARGER_H_ */
