@@ -13,12 +13,13 @@
 
 #define CAN_TIMEOUT_TICK_COUNT 5000u
 
-void can_send_PEI_Current(uint8_t shutdown_flags);
+void can_send_PEI_Shutdown(uint8_t shutdown_flags);
+void can_send_PEI_Current();
 
 void can_send_Charger();
 
 void can_send_BMS_Status();
-void can_send_BMS_Data();
+void can_send_BMS_High_Level_Data();
 
 void update_can_status();
 

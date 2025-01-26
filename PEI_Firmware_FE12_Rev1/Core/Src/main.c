@@ -340,10 +340,16 @@ int main(void)
 	  update_display(&htim10);
 	  HAL_GPIO_TogglePin(Heartbeat_GPIO_Port, Heartbeat_Pin);
 
-	  if (charger_attached) can_send_Charger();
-	  can_send_PEI_Current(shutdown_flags);
-	  can_send_BMS_Status();
-	  can_send_BMS_Data();
+	  if (charger_attached) {
+		  can_send_Charger();
+	  }
+	  else {
+		  can_send_PEI_Shutdown(shutdown_flags);
+		  can_send_PEI_Current();
+
+		  can_send_BMS_Status();
+		  can_send_BMS_High_Level_Data();
+	  }
 
 	  uart_send_GUI_Data(&huart3);
 
