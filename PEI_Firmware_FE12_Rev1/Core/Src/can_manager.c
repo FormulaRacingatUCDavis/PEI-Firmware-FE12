@@ -110,37 +110,48 @@ void can_send_BMS_Status() {
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
 	tx_header.StdId = BMS_STATUS_MSG_ID;
-	tx_header.DLC = 6;
+	tx_header.DLC = 5;
 
 	uint8_t tx_data[8];
-	tx_data[0] = HI8(bat_pack.status);
-	tx_data[1] = LO8(bat_pack.status);
-	tx_data[2] = HI8(bat_pack.spi_fault_addresses);
-	tx_data[3] = LO8(bat_pack.spi_fault_addresses);
-	tx_data[4] = get_max_fault_ic_addr();
-	tx_data[5] = (uint8_t)comm_bk_id;
+	tx_data[0] = bat_pack.status;
+	tx_data[1] = HI8(bat_pack.spi_fault_addresses);
+	tx_data[2] = LO8(bat_pack.spi_fault_addresses);
+	tx_data[3] = get_max_fault_ic_addr();
+	tx_data[4] = (uint8_t)comm_bk_id;
 
 	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_STATUS_TX_MAILBOX);
 }
 
 void can_send_BMS_High_Level_Data() {
 	const uint32_t BMS_HI_LVL_DATA_MSG_ID = 0x381;
-	static uint32_t BMS_HI_LVL_DATA_TX_MAILBOX;
+	static uint32_t BMS_HI_LVL_DATA_DASH_TX_MAILBOX;
+	static uint32_t BMS_HI_LVL_DATA_TELEM_TX_MAILBOX;
 
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
 	tx_header.StdId = BMS_HI_LVL_DATA_MSG_ID;
-	tx_header.DLC = 4;
+	tx_header.DLC = 2;
 
 	uint8_t tx_data[8];
+
+	// Send diagnostic BMS data to dash
+
+	tx_data[0] = bat_pack.HI_temp_c;
+	tx_data[1] = bat_pack.SOC_percent;
+
+	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_HI_LVL_DATA_DASH_TX_MAILBOX);
+
+	// Send raw BMS data to telem host
+
+	tx_header.DLC = 4;
+
 	tx_data[0] = HI8(bat_pack.HI_temp_raw);
 	tx_data[1] = LO8(bat_pack.HI_temp_raw);
 	tx_data[2] = HI8(bat_pack.total_voltage_raw);
 	tx_data[3] = LO8(bat_pack.total_voltage_raw);
 
-	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_HI_LVL_DATA_TX_MAILBOX);
-	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_HI_LVL_DATA_TX_MAILBOX);
+	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_HI_LVL_DATA_TELEM_TX_MAILBOX);
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
