@@ -344,7 +344,7 @@ int main(void)
 		  can_send_Charger();
 	  }
 	  else {
-		  can_send_PEI_Shutdown(shutdown_flags);
+		  can_send_PEI_Status(shutdown_flags);
 		  can_send_PEI_Current();
 
 		  can_send_BMS_Status();
