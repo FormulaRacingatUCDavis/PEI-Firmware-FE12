@@ -114,10 +114,10 @@ static void MX_CAN1_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_ADC3_Init(void);
 static void MX_SPI5_Init(void);
-static void MX_IWDG_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_TIM10_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
 static void BMS_Init();
 static float raw_to_amps(uint16_t current_raw);
@@ -204,10 +204,10 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC3_Init();
   MX_SPI5_Init();
-  MX_IWDG_Init();
   MX_CAN2_Init();
   MX_TIM10_Init();
   MX_TIM2_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim10);
   LCD_Init(&htim10);
@@ -675,9 +675,9 @@ static void MX_IWDG_Init(void)
 
   /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
-  hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_8;
   hiwdg.Init.Window = 4095;
-  hiwdg.Init.Reload = 400-1;
+  hiwdg.Init.Reload = 4000-1;
   if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
   {
     Error_Handler();
