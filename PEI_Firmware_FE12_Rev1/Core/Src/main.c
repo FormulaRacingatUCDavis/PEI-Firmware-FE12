@@ -32,6 +32,7 @@
 #include "relays.h"
 #include "LCD.h"
 #include "display.h"
+#include "data.h"
 
 /* USER CODE END Includes */
 
@@ -217,6 +218,7 @@ int main(void)
 
   BMS_MODE_t bms_status = BMS_NORMAL;
   uint32_t cell_disconnect_check_tickstart = HAL_GetTick();
+  uint32_t BMS_low_level_data_send_tickstart = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -349,6 +351,24 @@ int main(void)
 
 		  can_send_BMS_Status();
 		  can_send_BMS_High_Level_Data();
+
+		  // Send all raw BMS voltages and temps once a minute
+		  if ((HAL_GetTick() - BMS_low_level_data_send_tickstart) > 60000) {
+			  for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+
+				  // Send voltages
+				  for (uint8_t group = 0; group < 8; group++) {
+					  can_send_BMS_Voltages(subpack, group);
+				  }
+
+				  // Send temps
+				  for (uint8_t group = 0; group < 6; group++) {
+					  can_send_BMS_Temps(subpack, group);
+				  }
+			  }
+
+			  BMS_low_level_data_send_tickstart = HAL_GetTick();
+		  }
 	  }
 
 	  uart_send_GUI_Data(&huart3);

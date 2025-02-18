@@ -10,8 +10,8 @@
 
 #define N_OF_SUBPACK 5u // number of subpacks
 
-#define IC_PER_SUBPACK 2u // 6830 per subpack
-#define CELLS_PER_ADBMS 12u   // number of cells per LTC
+#define IC_PER_SUBPACK 2u // ADBMS6830s per subpack
+#define CELLS_PER_ADBMS 12u   // number of cells per IC
 #define CELL_TEMPS_PER_ADBMS 8u
 
 #define CELL_TEMPS_PER_SUBPACK (CELL_TEMPS_PER_ADBMS * IC_PER_SUBPACK)

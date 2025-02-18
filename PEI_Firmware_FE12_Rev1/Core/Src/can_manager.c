@@ -156,6 +156,63 @@ void can_send_BMS_High_Level_Data() {
 	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_HI_LVL_DATA_TELEM_TX_MAILBOX);
 }
 
+void can_send_BMS_Voltages(uint8_t subpack_num, uint8_t group) {
+	const uint32_t BMS_VOLTAGES_MSG_ID = 0x382;
+	static uint32_t BMS_VOLTAGES_TX_MAILBOX;
+
+	// Configure TX header
+	CAN_TxHeaderTypeDef tx_header;
+	set_tx_header_defaults(&tx_header);
+	tx_header.StdId = BMS_VOLTAGES_MSG_ID;
+	tx_header.DLC = 8;
+
+	uint8_t starting_cell = group * 3;
+	int16_t voltage1 = bat_pack.subpacks[subpack_num].cells[starting_cell].voltage_raw;
+	int16_t voltage2 = bat_pack.subpacks[subpack_num].cells[starting_cell + 1].voltage_raw;
+	int16_t voltage3 = bat_pack.subpacks[subpack_num].cells[starting_cell + 2].voltage_raw;
+
+	uint8_t tx_data[8];
+	tx_data[0] = subpack_num;
+	tx_data[1] = group;
+	tx_data[2] = HI8(voltage1);
+	tx_data[3] = LO8(voltage1);
+	tx_data[4] = HI8(voltage2);
+	tx_data[5] = LO8(voltage2);
+	tx_data[6] = HI8(voltage3);
+	tx_data[7] = LO8(voltage3);
+
+	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_VOLTAGES_MSG_ID);
+}
+
+void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
+	const uint32_t BMS_TEMPS_MSG_ID = 0x383;
+	static uint32_t BMS_TEMPS_TX_MAILBOX;
+
+	// Configure TX header
+	CAN_TxHeaderTypeDef tx_header;
+	set_tx_header_defaults(&tx_header);
+	tx_header.StdId = BMS_TEMPS_MSG_ID;
+	tx_header.DLC = 8;
+
+	uint8_t starting_cell = group * 3;
+	int16_t temp1 = bat_pack.subpacks[subpack_num].cell_temps[starting_cell].temp_raw;
+	int16_t temp2 = bat_pack.subpacks[subpack_num].cell_temps[starting_cell + 1].temp_raw;
+	int16_t temp3 = group < 5 ?
+			bat_pack.subpacks[subpack_num].cell_temps[starting_cell + 2].temp_raw : 0;
+
+	uint8_t tx_data[8];
+	tx_data[0] = subpack_num;
+	tx_data[1] = group;
+	tx_data[2] = HI8(temp1);
+	tx_data[3] = LO8(temp1);
+	tx_data[4] = HI8(temp2);
+	tx_data[5] = LO8(temp2);
+	tx_data[6] = HI8(temp3);
+	tx_data[7] = LO8(temp3);
+
+	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_TEMPS_MSG_ID);
+}
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 
 	static CAN_RxHeaderTypeDef rx0_header;
