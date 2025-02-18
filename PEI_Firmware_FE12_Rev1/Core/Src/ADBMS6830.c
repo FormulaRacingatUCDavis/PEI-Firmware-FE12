@@ -160,7 +160,7 @@ static void single_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to th
 		uint8_t idx = 4;
 
 		// Data written to last IC in the chain first and first IC in the chain last (see bus protocols in datasheet)
-		for (uint8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) {
+		for (int8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) {
 			uint16_t data_pec;
 
 			for (uint8_t i = 0; i < 6; i++) {
@@ -220,7 +220,7 @@ static void dual_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to the 
 		uint8_t idx = 4;
 
 		// Data packaging in the forward direction
-		for (uint8_t ic = comm_bk_id; ic >= 0; ic--) {
+		for (int8_t ic = comm_bk_id; ic >= 0; ic--) {
 			for (uint8_t i = 0; i < 6; i++) {
 				tx_data_fwd[idx] = data[ic][i];
 				idx++;
@@ -405,7 +405,7 @@ static uint8_t dual_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Pointer
 	}
 
 	uint8_t packet = 0;
-	for (uint8_t ic = N_OF_ADBMS - 1; ic > comm_bk_id; ic--, packet++) {
+	for (int8_t ic = N_OF_ADBMS - 1; ic > comm_bk_id; ic--, packet++) {
 		for (uint8_t i = 0; i < 6; i++) {
 			rx_data[ic][i] = rx_data_flattened_rev[(packet * 8) + i];
 		}
