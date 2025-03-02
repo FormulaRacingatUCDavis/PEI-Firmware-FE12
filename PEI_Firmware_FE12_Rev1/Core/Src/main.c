@@ -123,6 +123,8 @@ static void MX_TIM2_Init(void);
 static void BMS_Init();
 static float raw_to_amps(uint16_t current_raw);
 static void update_current();
+static void set_back_fans(float duty_cycle);
+static void set_side_fans(float duty_cycle);
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc);
 /* USER CODE END PFP */
@@ -153,6 +155,14 @@ static void update_current() {
 	 * is handled in the resulting DMA interrupt.
 	 */
 	HAL_ADC_Start_DMA(&hadc3, ADC_RES_BUFFER, 2);
+}
+
+static void set_back_fans(float duty_cycle) {
+	TIM2->CCR1 = (uint32_t)(duty_cycle * TIM2->ARR);
+}
+
+static void set_side_fans(float duty_cycle) {
+	TIM2->CCR2 = (uint32_t)(duty_cycle * TIM2->ARR);
 }
 
 // Called when ADC conversion and DMA transfer is complete
@@ -211,6 +221,8 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim10);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   LCD_Init(&htim10);
   BMS_Init();
 
@@ -768,11 +780,11 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 54-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 100-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
   {
     Error_Handler();
