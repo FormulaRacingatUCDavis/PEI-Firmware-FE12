@@ -84,7 +84,7 @@ void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw) {
 	bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw = temp_raw;
 
 	float temp_voltage = (temp_raw * 0.00015) + 1.5;
-	float temp = (1.0 / ((1.0 / 298.15) + ((1.0 / 3428.0) * log(temp_voltage / (3 - temp_voltage)))))
+	float temp = (1.0 / ((1.0 / 298.15) + ((1.0 / 3934.0) * log(temp_voltage / (3 - temp_voltage)))))
 				  - 273.15;
 
 	bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_c = temp;
