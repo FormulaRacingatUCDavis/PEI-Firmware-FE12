@@ -272,6 +272,13 @@ int main(void)
 			  break;
 	  }
 
+	  if (bat_pack.HI_temp_c > 40) {
+		  set_back_fans(0.4); // Set back-side cooling fans to 40% duty cycle
+	  }
+	  else {
+		  set_back_fans(0); // Stop back-side cooling fans
+	  }
+
 	  // Update SOC estimate
 	  update_SOC_input();
 	  EKF(); // run extended Kalman filter and update pack struct SOC estimate
