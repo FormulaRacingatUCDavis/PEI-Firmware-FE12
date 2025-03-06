@@ -273,10 +273,14 @@ int main(void)
 	  }
 
 	  if (bat_pack.HI_temp_c > 40) {
-		  set_back_fans(0.4); // Set back-side cooling fans to 40% duty cycle
+		  // Set cooling fans to 40% duty cycle
+		  set_back_fans(0.4);
+		  set_side_fans(0.4);
 	  }
 	  else {
-		  set_back_fans(0); // Stop back-side cooling fans
+		  // Stop back-side cooling fans
+		  set_back_fans(0);
+		  set_side_fans(0);
 	  }
 
 	  // Update SOC estimate
