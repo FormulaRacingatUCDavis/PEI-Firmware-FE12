@@ -243,7 +243,7 @@ static void dual_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to the 
 
 			data_pec = data_pec_calc(data[ic]);
 			tx_data_rev[idx] = HI8(data_pec);
-			tx_data_rev[idx] = LO8(data_pec);
+			tx_data_rev[idx + 1] = LO8(data_pec);
 			idx += 2;
 		}
 	}
