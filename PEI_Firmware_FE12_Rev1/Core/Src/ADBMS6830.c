@@ -54,16 +54,18 @@ static uint8_t tx_cfgb[N_OF_ADBMS][6]; // Stores CFGB data to be written to each
 static uint8_t tx_pwma[N_OF_ADBMS][6]; // Stores PWMA data to be written to each IC
 static uint8_t tx_pwmb[N_OF_ADBMS][6]; // Stores PWMB data to be written to each IC
 
+static uint8_t cmd_counter[N_OF_ADBMS];
+
 extern int8_t comm_bk_id;
 
 /*
- \brief Calculates and returns the CRC10 of a given register group
+ \brief Calculates and returns the CRC10 of a given register group to be written
 
  @param[in] uint8_t data[]: the array of data that the PEC will be generated from (6 bytes)
 
  @returns The calculated pec10 as an unsigned int16_t
 */
-static uint16_t data_pec_calc(uint8_t data[]) {
+static uint16_t write_data_pec_calc(uint8_t data[]) {
 
 	static const uint16_t crc10Table[256] = {0x0, 0x8f, 0x11e, 0x191, 0x23c, 0x2b3, 0x322, 0x3ad, 0xf7, 0x78, 0x1e9, 0x166,       // pre-computed CRC10 table
 	0x2cb, 0x244, 0x3d5, 0x35a, 0x1ee, 0x161, 0xf0, 0x7f, 0x3d2, 0x35d, 0x2cc, 0x243, 0x119,
@@ -87,13 +89,80 @@ static uint16_t data_pec_calc(uint8_t data[]) {
 	0xc6, 0x49, 0x313, 0x39c, 0x20d, 0x282, 0x12f, 0x1a0, 0x31, 0xbe};
 
 	uint16_t remainder = 16; // initialize the PEC
+	uint16_t poly = 0x48F;
 	uint8_t addr = 0;
 
 	for (uint8_t i = 0; i < 6; i++) { // loops for each byte in data array (there are 6 bytes in a register group)
 		addr = (uint8_t)(((remainder >> 2) ^ data[i]) & 0xFF); // calculate PEC table address
 		remainder = (remainder << 8) ^ crc10Table[addr];
 	}
-	return remainder;
+
+	for (uint8_t i = 0; i < 6; i++) {
+		if (remainder & 0x200) {
+			remainder = remainder << 1;
+			remainder = remainder ^ poly;
+		}
+		else {
+			remainder = remainder << 1;
+		}
+	}
+
+	return remainder & 0x3FF;
+}
+
+/*
+ \brief Calculates and returns the CRC10 of a given register group that is being read
+
+ @param[in] uint8_t data[]: the array of data that the PEC will be generated from (6 bytes)
+ @param[in] uint8_t cmd_count: the number of commands that increment the counter
+ 	 	 	 	 	 	 	   that have been sent to the chip
+
+ @returns The calculated pec10 as an unsigned int16_t
+*/
+static uint16_t read_data_pec_calc(uint8_t data[], uint8_t cmd_count) {
+
+	static const uint16_t crc10Table[256] = {0x0, 0x8f, 0x11e, 0x191, 0x23c, 0x2b3, 0x322, 0x3ad, 0xf7, 0x78, 0x1e9, 0x166,       // pre-computed CRC10 table
+	0x2cb, 0x244, 0x3d5, 0x35a, 0x1ee, 0x161, 0xf0, 0x7f, 0x3d2, 0x35d, 0x2cc, 0x243, 0x119,
+	0x196, 0x7, 0x88, 0x325, 0x3aa, 0x23b, 0x2b4, 0x3dc, 0x353, 0x2c2, 0x24d, 0x1e0, 0x16f,
+	0xfe, 0x71, 0x32b, 0x3a4, 0x235, 0x2ba, 0x117, 0x198, 0x9, 0x86, 0x232, 0x2bd, 0x32c,
+	0x3a3, 0xe, 0x81, 0x110, 0x19f, 0x2c5, 0x24a, 0x3db, 0x354, 0xf9, 0x76, 0x1e7, 0x168,
+	0x337, 0x3b8, 0x229, 0x2a6, 0x10b, 0x184, 0x15, 0x9a, 0x3c0, 0x34f, 0x2de, 0x251, 0x1fc,
+	0x173, 0xe2, 0x6d, 0x2d9, 0x256, 0x3c7, 0x348, 0xe5, 0x6a, 0x1fb, 0x174, 0x22e, 0x2a1,
+	0x330, 0x3bf, 0x12, 0x9d, 0x10c, 0x183, 0xeb, 0x64, 0x1f5, 0x17a, 0x2d7, 0x258, 0x3c9,
+	0x346, 0x1c, 0x93, 0x102, 0x18d, 0x220, 0x2af, 0x33e, 0x3b1, 0x105, 0x18a, 0x1b, 0x94,
+	0x339, 0x3b6, 0x227, 0x2a8, 0x1f2, 0x17d, 0xec, 0x63, 0x3ce, 0x341, 0x2d0, 0x25f, 0x2e1,
+	0x26e, 0x3ff, 0x370, 0xdd, 0x52, 0x1c3, 0x14c, 0x216, 0x299, 0x308, 0x387, 0x2a, 0xa5,
+	0x134, 0x1bb, 0x30f, 0x380, 0x211, 0x29e, 0x133, 0x1bc, 0x2d, 0xa2, 0x3f8, 0x377, 0x2e6,
+	0x269, 0x1c4, 0x14b, 0xda, 0x55, 0x13d, 0x1b2, 0x23, 0xac, 0x301, 0x38e, 0x21f, 0x290,
+	0x1ca, 0x145, 0xd4, 0x5b, 0x3f6, 0x379, 0x2e8, 0x267, 0xd3, 0x5c, 0x1cd, 0x142, 0x2ef,
+	0x260, 0x3f1, 0x37e, 0x24, 0xab, 0x13a, 0x1b5, 0x218, 0x297, 0x306, 0x389, 0x1d6, 0x159,
+	0xc8, 0x47, 0x3ea, 0x365, 0x2f4, 0x27b, 0x121, 0x1ae, 0x3f, 0xb0, 0x31d, 0x392, 0x203,
+	0x28c, 0x38, 0xb7, 0x126, 0x1a9, 0x204, 0x28b, 0x31a, 0x395, 0xcf, 0x40, 0x1d1, 0x15e,
+	0x2f3, 0x27c, 0x3ed, 0x362, 0x20a, 0x285, 0x314, 0x39b, 0x36, 0xb9, 0x128, 0x1a7, 0x2fd,
+	0x272, 0x3e3, 0x36c, 0xc1, 0x4e, 0x1df, 0x150, 0x3e4, 0x36b, 0x2fa, 0x275, 0x1d8, 0x157,
+	0xc6, 0x49, 0x313, 0x39c, 0x20d, 0x282, 0x12f, 0x1a0, 0x31, 0xbe};
+
+	uint16_t remainder = 16; // initialize the PEC
+	uint16_t poly = 0x48F;
+	uint8_t addr = 0;
+
+	for (uint8_t i = 0; i < 6; i++) { // loops for each byte in data array (there are 6 bytes in a register group)
+		addr = (uint8_t)(((remainder >> 2) ^ data[i]) & 0xFF); // calculate PEC table address
+		remainder = (remainder << 8) ^ crc10Table[addr];
+	}
+	remainder ^= ((cmd_count << 2) & 0xFC) << 2;
+
+	for (uint8_t i = 0; i < 6; i++) {
+		if (remainder & 0x200) {
+			remainder = remainder << 1;
+			remainder = remainder ^ poly;
+		}
+		else {
+			remainder = remainder << 1;
+		}
+	}
+
+	return remainder & 0x3FF;
 }
 
 /*
@@ -168,7 +237,7 @@ static void single_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to th
 				idx++;
 			}
 
-			data_pec = data_pec_calc(data[ic]);
+			data_pec = write_data_pec_calc(data[ic]);
 			tx_data[idx] = HI8(data_pec);
 			tx_data[idx + 1] = LO8(data_pec);
 			idx += 2;
@@ -226,7 +295,7 @@ static void dual_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to the 
 				idx++;
 			}
 
-			data_pec = data_pec_calc(data[ic]);
+			data_pec = write_data_pec_calc(data[ic]);
 			tx_data_fwd[idx] = HI8(data_pec);
 			tx_data_fwd[idx + 1] = LO8(data_pec);
 			idx += 2;
@@ -241,9 +310,9 @@ static void dual_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to the 
 				idx++;
 			}
 
-			data_pec = data_pec_calc(data[ic]);
+			data_pec = write_data_pec_calc(data[ic]);
 			tx_data_rev[idx] = HI8(data_pec);
-			tx_data_rev[idx] = LO8(data_pec);
+			tx_data_rev[idx + 1] = LO8(data_pec);
 			idx += 2;
 		}
 	}
@@ -286,6 +355,11 @@ static void spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to the SPI h
 	else {
 		dual_spi_write(hspi_ptr, htim_ptr, cmd, data);
 	}
+
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
+		cmd_counter[ic]++;
+		if (cmd_counter[ic] > 63) cmd_counter[ic] = 1;
+	}
 }
 
 // SPI read for when we are only using the transceiver in the forward direction
@@ -325,9 +399,19 @@ static uint8_t single_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Point
 			rx_data[ic][i] = rx_data_flattened[(ic * 8) + i];
 		}
 
-		uint16_t data_pec = data_pec_calc(rx_data[ic]);
-		uint16_t received_pec = rx_data_flattened[(ic * 8) + 6] << 8;
+		uint16_t data_pec = read_data_pec_calc(rx_data[ic], cmd_counter[ic]);
+		uint16_t received_pec = (rx_data_flattened[(ic * 8) + 6] & 0x03) << 8;
 		received_pec += rx_data_flattened[(ic * 8) + 7];
+		uint8_t received_cmd_count = (rx_data_flattened[(ic * 8) + 6] & 0xFC) >> 2;
+
+//		if ((data_pec != received_pec) && (data_pec != 90) && (received_pec != 1023)) {
+//			//no_errors = 0;
+//			pec_mismatches[ic] = 1;
+//		}
+//		else {
+//			pec_mismatches[ic] = 0;
+//		}
+//		pec_mismatches[ic] = 0;
 
 		if (data_pec != received_pec) {
 			no_errors = 0;
@@ -336,6 +420,8 @@ static uint8_t single_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Point
 		else {
 			pec_mismatches[ic] = 0;
 		}
+
+		cmd_counter[ic] = received_cmd_count;
 	}
 
 	return no_errors;
@@ -391,9 +477,10 @@ static uint8_t dual_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Pointer
 			rx_data[ic][i] = rx_data_flattened_fwd[(ic * 8) + i];
 		}
 
-		uint16_t data_pec = data_pec_calc(rx_data[ic]);
+		uint16_t data_pec = read_data_pec_calc(rx_data[ic], cmd_counter[ic]);
 		uint16_t received_pec = rx_data_flattened_fwd[(ic * 8) + 6] << 8;
 		received_pec += rx_data_flattened_fwd[(ic * 8) + 7];
+		uint8_t received_cmd_count = (rx_data_flattened_fwd[(ic * 8) + 6] & 0xFC) >> 2;
 
 		if (data_pec != received_pec) {
 			no_errors = 0;
@@ -402,17 +489,20 @@ static uint8_t dual_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Pointer
 		else {
 			pec_mismatches[ic] = 0;
 		}
+
+		cmd_counter[ic] = received_cmd_count;
 	}
 
 	uint8_t packet = 0;
-	for (uint8_t ic = N_OF_ADBMS - 1; ic > comm_bk_id; ic--, packet++) {
+	for (int8_t ic = N_OF_ADBMS - 1; ic > comm_bk_id; ic--, packet++) {
 		for (uint8_t i = 0; i < 6; i++) {
 			rx_data[ic][i] = rx_data_flattened_rev[(packet * 8) + i];
 		}
 
-		uint16_t data_pec = data_pec_calc(rx_data[ic]);
+		uint16_t data_pec = read_data_pec_calc(rx_data[ic], cmd_counter[ic]);
 		uint16_t received_pec = rx_data_flattened_rev[(packet * 8) + 6] << 8;
 		received_pec += rx_data_flattened_rev[(packet * 8) + 7];
+		uint8_t received_cmd_count = (rx_data_flattened_rev[(ic * 8) + 6] & 0xFC) >> 2;
 
 		if (data_pec != received_pec) {
 			no_errors = 0;
@@ -421,6 +511,8 @@ static uint8_t dual_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Pointer
 		else {
 			pec_mismatches[ic] = 0;
 		}
+
+		cmd_counter[ic] = received_cmd_count;
 	}
 
 	return no_errors;
@@ -484,6 +576,8 @@ void ADBMS6830_initialize(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* 
 		tx_pwmb[ic][3] = PWMB3;
 		tx_pwmb[ic][4] = PWMB4;
 		tx_pwmb[ic][5] = PWMB5;
+
+		cmd_counter[ic] = 0;
 	}
 
 	ADBMS6830_set_Aux_ADC(0, 0, AUX_CH_ALL);
@@ -669,10 +763,8 @@ static void ADBMS6830_freeze_results(SPI_HandleTypeDef* const hspi_ptr,
 									 TIM_HandleTypeDef* const htim_ptr
 									 )
 {
-	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-		tx_cfga[ic][5] |= 0x20; // turn on snapshot bit
-	}
-	ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
+	uint8_t cmd[2] = {0x00, 0x2D};
+	spi_write(hspi_ptr, htim_ptr, cmd, NULL);
 }
 
 // Allow result registers to be updated again
@@ -680,10 +772,8 @@ static void ADBMS6830_unfreeze_results(SPI_HandleTypeDef* const hspi_ptr,
 									   TIM_HandleTypeDef* const htim_ptr
 									   )
 {
-	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-		tx_cfga[ic][5] &= ~0x20; // turn off snapshot bit
-	}
-	ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
+	uint8_t cmd[2] = {0x00, 0x2F};
+	spi_write(hspi_ptr, htim_ptr, cmd, NULL);
 }
 
 /*
@@ -736,17 +826,15 @@ void ADBMS6830_rdfc_all(SPI_HandleTypeDef* const hspi_ptr,             // Pointe
 	const uint8_t CELL_IN_REG = 3u; // 6 bytes per register / 2 bytes per cell = 3 cell voltages per register
 
 	// Wake up ICs if necessary
-	if (ADBMS6830_wakeup_necessary()) {
-		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	}
+
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 
 	// Freeze all result registers for data coherence
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 4; reg++) {
-		if (ADBMS6830_wakeup_necessary()) {
-			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-		}
+
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 
 		uint8_t data[N_OF_ADBMS][6];
 		ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
@@ -763,9 +851,7 @@ void ADBMS6830_rdfc_all(SPI_HandleTypeDef* const hspi_ptr,             // Pointe
 		}
 	}
 
-	if (ADBMS6830_wakeup_necessary()) {
-		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	}
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
 }
@@ -975,17 +1061,14 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* const hspi_ptr,       
 	const uint8_t TEMP_IN_REG = 3u; // 6 register bytes / 2 bytes per voltage = 3 temp voltages per register
 
 	// Wake up ICs if necessary
-	if (ADBMS6830_wakeup_necessary()) {
-		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	}
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 
 	// Freeze all result registers for data coherence
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 3; reg++) {
-		if (ADBMS6830_wakeup_necessary()) {
-			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-		}
+
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 
 		uint8_t data[N_OF_ADBMS][6];
 		ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
@@ -1003,9 +1086,7 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* const hspi_ptr,       
 		}
 	}
 
-	if (ADBMS6830_wakeup_necessary()) {
-		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	}
+	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
 }
