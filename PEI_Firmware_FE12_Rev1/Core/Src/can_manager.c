@@ -67,7 +67,7 @@ void can_send_PEI_Status(uint8_t shutdown_flags) {
 }
 
 void can_send_PEI_Current() {
-	const uint32_t PEI_CURRENT_MSG_ID = 0x387;
+	const uint32_t PEI_CURRENT_MSG_ID = 0x388;
 	static uint32_t PEI_CURRENT_TX_MAILBOX;
 
 	// Configure TX header
@@ -126,38 +126,46 @@ void can_send_BMS_Status() {
 	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_STATUS_TX_MAILBOX);
 }
 
-void can_send_BMS_High_Level_Data() {
-	const uint32_t BMS_HI_LVL_DATA_MSG_ID = 0x381;
-	static uint32_t BMS_HI_LVL_DATA_DASH_TX_MAILBOX;
-	static uint32_t BMS_HI_LVL_DATA_TELEM_TX_MAILBOX;
+void can_send_BMS_Diagnostics() {
+	const uint32_t BMS_DIAGNOSTIC_DATA_MSG_ID = 0x381;
+	static uint32_t BMS_DIAGNOSTIC_DATA_TX_MAILBOX;
 
 	// Configure TX header
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
-	tx_header.StdId = BMS_HI_LVL_DATA_MSG_ID;
+	tx_header.StdId = BMS_DIAGNOSTIC_DATA_MSG_ID;
 	tx_header.DLC = 4;
 
 	uint8_t tx_data[8];
-
-	// Send diagnostic BMS data to dash
-
 	tx_data[0] = bat_pack.HI_temp_c;
 	tx_data[1] = bat_pack.SOC_percent;
 	tx_data[2] = HI8(bat_pack.total_voltage_raw);
 	tx_data[3] = LO8(bat_pack.total_voltage_raw);
 
-	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_HI_LVL_DATA_DASH_TX_MAILBOX);
+	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_DIAGNOSTIC_DATA_TX_MAILBOX);
+}
 
-	// Send raw BMS data to telem host
+void can_send_BMS_High_Level_Data() {
+	const uint32_t BMS_HIGH_LEVEL_DATA_MSG_ID = 0x382;
+	static uint32_t BMS_HIGH_LEVEL_DATA_TX_MAILBOX;
 
+	// Configure TX header
+	CAN_TxHeaderTypeDef tx_header;
+	set_tx_header_defaults(&tx_header);
+	tx_header.StdId = BMS_HIGH_LEVEL_DATA_MSG_ID;
+	tx_header.DLC = 4;
+
+	uint8_t tx_data[8];
 	tx_data[0] = HI8(bat_pack.HI_temp_raw);
 	tx_data[1] = LO8(bat_pack.HI_temp_raw);
+	tx_data[2] = HI8(bat_pack.total_voltage_raw);
+	tx_data[3] = LO8(bat_pack.total_voltage_raw);
 
-	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_HI_LVL_DATA_TELEM_TX_MAILBOX);
+	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_HIGH_LEVEL_DATA_TX_MAILBOX);
 }
 
 void can_send_BMS_Voltages(uint8_t subpack_num, uint8_t group) {
-	const uint32_t BMS_VOLTAGES_MSG_ID = 0x382;
+	const uint32_t BMS_VOLTAGES_MSG_ID = 0x383;
 	static uint32_t BMS_VOLTAGES_TX_MAILBOX;
 
 	// Configure TX header
@@ -185,7 +193,7 @@ void can_send_BMS_Voltages(uint8_t subpack_num, uint8_t group) {
 }
 
 void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
-	const uint32_t BMS_TEMPS_MSG_ID = 0x383;
+	const uint32_t BMS_TEMPS_MSG_ID = 0x384;
 	static uint32_t BMS_TEMPS_TX_MAILBOX;
 
 	// Configure TX header
@@ -196,7 +204,8 @@ void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
 
 	uint8_t starting_cell = group * 3;
 	int16_t temp1 = bat_pack.subpacks[subpack_num].cell_temps[starting_cell].temp_raw;
-	int16_t temp2 = bat_pack.subpacks[subpack_num].cell_temps[starting_cell + 1].temp_raw;
+	int16_t temp2 = group < 5 ?
+			bat_pack.subpacks[subpack_num].cell_temps[starting_cell + 1].temp_raw : 0;
 	int16_t temp3 = group < 5 ?
 			bat_pack.subpacks[subpack_num].cell_temps[starting_cell + 2].temp_raw : 0;
 
