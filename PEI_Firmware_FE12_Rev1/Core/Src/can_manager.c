@@ -189,7 +189,7 @@ void can_send_BMS_Voltages(uint8_t subpack_num, uint8_t group) {
 	tx_data[6] = HI8(voltage3);
 	tx_data[7] = LO8(voltage3);
 
-	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_VOLTAGES_MSG_ID);
+	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_VOLTAGES_TX_MAILBOX);
 }
 
 void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
@@ -219,7 +219,7 @@ void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
 	tx_data[6] = HI8(temp3);
 	tx_data[7] = LO8(temp3);
 
-	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_TEMPS_MSG_ID);
+	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_TEMPS_TX_MAILBOX);
 }
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
