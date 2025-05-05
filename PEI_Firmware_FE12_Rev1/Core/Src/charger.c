@@ -29,7 +29,7 @@ uint8_t charge_profile_received = 0;
 Charge_Profile_t selected_profile;
 
 void update_max_charge_current() {
-	uint8_t soc_diff = bat_pack.SOC_percent - selected_profile.attenuation_threshold;
+	int8_t soc_diff = bat_pack.SOC_percent - selected_profile.attenuation_threshold;
 
 	if (soc_diff > 0) {
 		charger_max_current = (uint16_t)(selected_profile.charger_max_current / soc_diff);
