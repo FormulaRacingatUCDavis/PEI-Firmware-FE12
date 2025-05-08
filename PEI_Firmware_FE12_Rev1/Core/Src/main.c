@@ -158,11 +158,11 @@ static void update_current() {
 }
 
 static void set_back_fans(float duty_cycle) {
-	TIM2->CCR1 = (uint32_t)(duty_cycle * TIM2->ARR);
+	htim2.Instance->CCR1 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
 }
 
 static void set_side_fans(float duty_cycle) {
-	TIM2->CCR2 = (uint32_t)(duty_cycle * TIM2->ARR);
+	htim2.Instance->CCR2 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
 }
 
 // Called when ADC conversion and DMA transfer is complete
