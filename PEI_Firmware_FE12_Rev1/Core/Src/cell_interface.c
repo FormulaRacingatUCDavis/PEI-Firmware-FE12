@@ -236,8 +236,7 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 
 	ADBMS6830_set_S_ADC(1, 0, 0, CELL_OW_DISABLED); // DCP = 0, CONT = 1, OW = 0
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
-	HAL_Delay(8);
-
+	HAL_Delay(16);
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 	ADBMS6830_rdstatc_mismatch(hspi_ptr, htim_ptr, mismatch_flags, spi_errors);
 	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
@@ -290,15 +289,15 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 					open_wire_voltage = (odd_open_wire_voltages[ic][cell] * 0.00015) + 1.5;
 				}
 
-				bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] += mismatch_flags[ic][cell];
-				if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL]
-					> ERROR_VOLTAGE_LIMIT) {
-					bat_pack.status |= MISMATCH;
-				}
+//				bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL] += mismatch_flags[ic][cell];
+//				if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[RD_FAIL]
+//					> ERROR_VOLTAGE_LIMIT) {
+//					bat_pack.status |= MISMATCH;
+//				}
 
 				float percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
 				if (percent_difference < 0) percent_difference = -percent_difference;
-				if (percent_difference > 0.15) {
+				if (percent_difference > 0.125) {
 					bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]++;
 					if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]
 						> ERROR_VOLTAGE_LIMIT) {
