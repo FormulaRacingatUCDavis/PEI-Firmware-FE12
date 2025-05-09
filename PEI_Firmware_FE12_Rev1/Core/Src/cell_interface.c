@@ -298,7 +298,7 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 
 				float percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
 				if (percent_difference < 0) percent_difference = -percent_difference;
-				if (percent_difference > 0.1) {
+				if (percent_difference > 0.15) {
 					bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]++;
 					if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]
 						> ERROR_VOLTAGE_LIMIT) {

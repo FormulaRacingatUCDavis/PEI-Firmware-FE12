@@ -580,7 +580,7 @@ void ADBMS6830_initialize(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* 
 	ADBMS6830_wrcfgb(hspi_ptr, htim_ptr);
 
 	// See Cell Discharge With Cell Measurements and Cell Diagnostics section of datasheet
-	ADBMS6830_set_C_ADC(0, 1, 0, 0, CELL_OW_DISABLED); // RD = 0, DCP = 0, CONT = 1
+	ADBMS6830_set_C_ADC(1, 1, 0, 0, CELL_OW_DISABLED); // RD = 1, DCP = 0, CONT = 1
 	ADBMS6830_adcv(hspi_ptr, htim_ptr);
 }
 
@@ -1111,10 +1111,12 @@ void ADBMS6830_rdstatc_mismatch(SPI_HandleTypeDef* const hspi_ptr,              
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		if (!spi_errors[ic]) {
-			for (uint8_t reg_idx = 0; reg_idx < 2; reg_idx++) {
-				for (uint8_t bit = 0; bit < 8; bit++) {
-					if ((reg_idx == 1) && (bit == 4)) break; // Ignore flags past CS12FLT since we only have 12 cells per IC
-					mismatches[ic][(reg_idx * 8) + bit] = (data[ic][reg_idx] >> bit) & 0x01;
+			if (data[ic][5] & 0x20) { // Check if C-ADC/S-ADC comparisons are enabled
+				for (uint8_t reg_idx = 0; reg_idx < 2; reg_idx++) {
+					for (uint8_t bit = 0; bit < 8; bit++) {
+						if ((reg_idx == 1) && (bit == 4)) break; // Ignore flags past CS12FLT since we only have 12 cells per IC
+						mismatches[ic][(reg_idx * 8) + bit] = (data[ic][reg_idx] >> bit) & 0x01;
+					}
 				}
 			}
 		}
