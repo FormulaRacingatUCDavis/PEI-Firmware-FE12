@@ -37,4 +37,8 @@ void update_max_charge_current() {
 	else {
 		charger_max_current = selected_profile.charger_max_current;
 	}
+
+	if ((charger_max_current < 0) || (charger_max_current > selected_profile.charger_max_current)) {
+		charger_max_current = selected_profile.charger_max_current;
+	}
 }

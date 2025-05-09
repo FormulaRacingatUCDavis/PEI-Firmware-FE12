@@ -395,7 +395,7 @@ void process_temps() {
 						bat_pack.status |= PACK_TEMP_OVER;
 					}
 				}
-				else if (temp_c < UNDER_TEMP) {
+				else if ((temp_c < UNDER_TEMP) && ((uint8_t)temp_c != 0)) {
 					bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP]++;
 					if (bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[UNDERTEMP]
 					    > ERROR_TEMPERATURE_LIMIT) {

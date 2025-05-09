@@ -103,6 +103,8 @@ volatile uint32_t ticks_since_charger_message = 0;
 
 // Buffer to store raw ADC measurements
 static uint32_t ADC_RES_BUFFER[2];
+static uint8_t is_first_measurement = 1;
+float current_reference;
 
 /* USER CODE END PV */
 
@@ -172,8 +174,13 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc) {
 	bat_pack.current_ref_raw = ADC_RES_BUFFER[1];
 
 	// Calculate current in Amps
-	float current_ref = raw_to_amps(ADC_RES_BUFFER[1]);
-	float current = raw_to_amps(ADC_RES_BUFFER[0]) - current_ref;
+	//float current_ref = raw_to_amps(ADC_RES_BUFFER[1]);
+	float current = raw_to_amps(ADC_RES_BUFFER[0]);
+
+	if (is_first_measurement) current_reference = current;
+	else {
+		bat_pack.current = current - current_reference;
+	}
 
 	// Move calculated current into bat_pack struct
 	bat_pack.current = current;
@@ -215,7 +222,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC3_Init();
   MX_SPI5_Init();
-  //MX_IWDG_Init();
+  MX_IWDG_Init();
   MX_CAN2_Init();
   MX_TIM10_Init();
   MX_TIM2_Init();
@@ -278,7 +285,7 @@ int main(void)
 		  set_side_fans(0.4);
 	  }
 	  else {
-		  // Stop back-side cooling fans
+		  // Stop cooling fans
 		  set_back_fans(0);
 		  set_side_fans(0);
 	  }
@@ -685,9 +692,13 @@ static void MX_CAN2_Init(void)
   can2_filter.FilterMode = CAN_FILTERMODE_IDMASK;
   can2_filter.FilterScale = CAN_FILTERSCALE_32BIT;
   can2_filter.FilterIdHigh = charger_id >> 16;
-  can2_filter.FilterIdLow = charger_id & 0x0000FFFF;
+  can2_filter.FilterIdLow = (charger_id >> 3) & 0x0000FFFF;
   can2_filter.FilterMaskIdHigh = charger_id >> 16;
-  can2_filter.FilterMaskIdLow = charger_id & 0x0000FFFF;
+  can2_filter.FilterMaskIdLow = (charger_id >> 3) & 0x0000FFFF;
+//  can2_filter.FilterIdHigh = 0;
+//  can2_filter.FilterIdLow = 0;
+//  can2_filter.FilterMaskIdHigh = 0;
+//  can2_filter.FilterMaskIdLow = 0;
   if (HAL_CAN_ConfigFilter(&hcan2, &can2_filter) != HAL_OK) {
 	  Error_Handler();
   }
