@@ -109,8 +109,7 @@ void update_display(TIM_HandleTypeDef* const htim_ptr) {
 
 	if (!spi_fault) {
 		LCD_Position(htim_ptr, 1, 0);
-		//sprintf(str, "%u%% ", bat_pack.SOC_percent);
-		sprintf(str, "%uV", (uint16_t)bat_pack.total_voltage);
+		sprintf(str, "%u%% ", bat_pack.SOC_percent);
 		LCD_PrintString(htim_ptr, str);
 
 		LCD_Position(htim_ptr, 1, 5);

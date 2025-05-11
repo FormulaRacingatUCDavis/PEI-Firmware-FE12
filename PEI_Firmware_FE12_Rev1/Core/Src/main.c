@@ -95,6 +95,7 @@ extern volatile BAT_PACK_t bat_pack;
 extern volatile uint8_t charger_attached;
 extern uint8_t charge_control;
 extern uint8_t charge_profile_received;
+extern uint16_t charger_max_current;
 
 // Tick counters
 volatile uint32_t ticks_since_vcu_message = 0;
@@ -104,7 +105,6 @@ volatile uint32_t ticks_since_charger_message = 0;
 // Buffer to store raw ADC measurements
 static uint32_t ADC_RES_BUFFER[2];
 static uint8_t is_first_measurement = 1;
-float current_reference;
 
 /* USER CODE END PV */
 
@@ -123,7 +123,8 @@ static void MX_TIM10_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 static void BMS_Init();
-static float raw_to_amps(uint16_t current_raw);
+static float raw_to_mvolts(uint16_t adc_raw);
+static float mvolts_to_amps(float mVolts, float mVolt_ref);
 static void update_current();
 static void set_back_fans(float duty_cycle);
 static void set_side_fans(float duty_cycle);
@@ -142,11 +143,12 @@ static void BMS_Init() {
 	init_SOC_vars();
 }
 
-static float raw_to_amps(uint16_t current_raw) {
-	float mVolts = ((float)current_raw / 4095) * 3.3 * 1000;
-	float current = ((mVolts * 7.4 / 4.7) - 2500) / 6.667;
+static float raw_to_mvolts(uint16_t adc_raw) {
+	return ((float)adc_raw / 4095) * 3.3 * 1000;
+}
 
-	return current;
+static float mvolts_to_amps(float mVolts, float mVolt_ref) {
+	return ((mVolts - mVolt_ref) * 7.4 / 4.7) / 6.667;
 }
 
 static void update_current() {
@@ -171,19 +173,21 @@ static void set_side_fans(float duty_cycle) {
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc) {
 	// Move raw measurements into bat_pack struct
 	bat_pack.current_raw = ADC_RES_BUFFER[0];
-	bat_pack.current_ref_raw = ADC_RES_BUFFER[1];
+	//bat_pack.current_ref_raw = ADC_RES_BUFFER[1];
 
 	// Calculate current in Amps
-	//float current_ref = raw_to_amps(ADC_RES_BUFFER[1]);
-	float current = raw_to_amps(ADC_RES_BUFFER[0]);
-
-	if (is_first_measurement) current_reference = current;
-	else {
-		bat_pack.current = current - current_reference;
+	//float mVolt_ref = raw_to_mvolts(ADC_RES_BUFFER[1]);
+	static float mVolt_ref;
+	if (is_first_measurement) {
+		bat_pack.current_raw = ADC_RES_BUFFER[0];
+		mVolt_ref = raw_to_mvolts(ADC_RES_BUFFER[0]);
+		is_first_measurement = 0;
 	}
 
+	float mVolts = raw_to_mvolts(ADC_RES_BUFFER[0]);
+
 	// Move calculated current into bat_pack struct
-	bat_pack.current = current;
+	bat_pack.current = mvolts_to_amps(mVolts, mVolt_ref);
 }
 /* USER CODE END 0 */
 
@@ -346,9 +350,9 @@ int main(void)
 
 			  charge_profile_received = uart_receive_charge_profile(&huart3);
 			  if (charger_attached && charge_profile_received) {
-				  charge_control = CHARGE_START;
 				  update_max_charge_current();
 			  }
+			  if (charger_max_current != 0) charge_control = CHARGE_START;
 
 			  if (!hv_request()) {
 				  pei_state = PEI_LV;
@@ -682,7 +686,7 @@ static void MX_CAN2_Init(void)
   }
   /* USER CODE BEGIN CAN2_Init 2 */
   // Filter charger messages into FIFO0
-  const uint32_t charger_id = 0x18FF50EF << 3;
+  const uint32_t charger_id = 0x18FF50E5 << 3;
 
   CAN_FilterTypeDef can2_filter;
   can2_filter.FilterActivation = CAN_FILTER_ENABLE;
@@ -692,13 +696,9 @@ static void MX_CAN2_Init(void)
   can2_filter.FilterMode = CAN_FILTERMODE_IDMASK;
   can2_filter.FilterScale = CAN_FILTERSCALE_32BIT;
   can2_filter.FilterIdHigh = charger_id >> 16;
-  can2_filter.FilterIdLow = (charger_id >> 3) & 0x0000FFFF;
+  can2_filter.FilterIdLow = charger_id & 0x0000FFFF;
   can2_filter.FilterMaskIdHigh = charger_id >> 16;
-  can2_filter.FilterMaskIdLow = (charger_id >> 3) & 0x0000FFFF;
-//  can2_filter.FilterIdHigh = 0;
-//  can2_filter.FilterIdLow = 0;
-//  can2_filter.FilterMaskIdHigh = 0;
-//  can2_filter.FilterMaskIdLow = 0;
+  can2_filter.FilterMaskIdLow = charger_id & 0x0000FFFF;
   if (HAL_CAN_ConfigFilter(&hcan2, &can2_filter) != HAL_OK) {
 	  Error_Handler();
   }
