@@ -268,6 +268,9 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 	const uint32_t MC_STATE_MSG_ID = 0x0AA;
 	const uint32_t MC_FAULT_MSG_ID = 0x0AB;
 
+	mc_tickstart = HAL_GetTick();
+	ticks_since_mc_message = 0;
+
 	uint32_t id = rx1_header.StdId;
 	if (id == MC_VOLTAGE_MSG_ID) {
 		mc_voltage = CAN_RX1_BUFFER[1] << 8;

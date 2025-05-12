@@ -348,11 +348,15 @@ int main(void)
 		  case PEI_HV:
 			  finish_precharge();
 
-			  charge_profile_received = uart_receive_charge_profile(&huart3);
-			  if (charger_attached && charge_profile_received) {
-				  update_max_charge_current();
+			  if (charger_attached) {
+				  charge_profile_received = uart_receive_charge_profile(&huart3);
+				  if (charge_profile_received) {
+					  update_max_charge_current();
+				  }
+				  if (charger_max_current != 0) {
+					  charge_control = CHARGE_START;
+				  }
 			  }
-			  if (charger_max_current != 0) charge_control = CHARGE_START;
 
 			  if (!hv_request()) {
 				  pei_state = PEI_LV;
