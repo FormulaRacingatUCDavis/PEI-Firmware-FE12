@@ -127,28 +127,28 @@ static void update_spi_errors(SPI_HandleTypeDef* const hspi_ptr,
 		 * a communication break, but it might be worth trying to reach
 		 * it from the other end of the chain anyways.
 		 */
-//		if (!comm_bk_enabled) {
-//			comm_bk_present = spi_errors[ic];
-//
-//			/*
-//			 * If there is a communication break, then we want to halt transmission
-//			 * on the last node before the communication break.
-//			 */
-//			if ((ic > 0)) {
-//				if (comm_bk_present && !spi_errors[ic - 1]) comm_bk_id = ic - 1;
-//				if (!comm_bk_present && spi_errors[ic - 1]) comm_bk_id = -1;
-//			}
-//		}
+		if (!comm_bk_enabled) {
+			comm_bk_present = spi_errors[ic];
+
+			/*
+			 * If there is a communication break, then we want to halt transmission
+			 * on the last node before the communication break.
+			 */
+			if ((ic > 0)) {
+				if (comm_bk_present && !spi_errors[ic - 1]) comm_bk_id = ic - 1;
+				if (!comm_bk_present && spi_errors[ic - 1]) comm_bk_id = -1;
+			}
+		}
 	}
 
-//	if (comm_bk_present) {
-//		if (!comm_bk_enabled) {
-//			ADBMS6830_enable_comm_bk();
-//			ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
-//
-//			comm_bk_enabled = 1;
-//		}
-//	}
+	if (comm_bk_present) {
+		if (!comm_bk_enabled) {
+			ADBMS6830_enable_comm_bk();
+			ADBMS6830_wrcfga(hspi_ptr, htim_ptr);
+
+			comm_bk_enabled = 1;
+		}
+	}
 }
 
 // Takes an array of SPI error arrays and ORs them into one SPI error array
