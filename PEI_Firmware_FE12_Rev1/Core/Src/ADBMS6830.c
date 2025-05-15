@@ -817,15 +817,19 @@ void ADBMS6830_rdfc_all(SPI_HandleTypeDef* const hspi_ptr,             // Pointe
 	const uint8_t CELL_IN_REG = 3u; // 6 bytes per register / 2 bytes per cell = 3 cell voltages per register
 
 	// Wake up ICs if necessary
-
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (ADBMS6830_wakeup_necessary()) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 
 	// Freeze all result registers for data coherence
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 4; reg++) {
 
-		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		// Wake up ICs if necessary
+		if (ADBMS6830_wakeup_necessary()) {
+			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		}
 
 		uint8_t data[N_OF_ADBMS][6];
 		ADBMS6830_rdfc_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
@@ -839,10 +843,18 @@ void ADBMS6830_rdfc_all(SPI_HandleTypeDef* const hspi_ptr,             // Pointe
 					voltages[ic][(reg * CELL_IN_REG) + cell] = parsed_voltage;
 				}
 			}
+			else {
+				for (uint8_t cell = 0; cell < CELL_IN_REG; cell++) {
+					voltages[ic][(reg * CELL_IN_REG) + cell] = 0;
+				}
+			}
 		}
 	}
 
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	// Wake up ICs if necessary
+	if (ADBMS6830_wakeup_necessary()) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
 }
@@ -906,6 +918,7 @@ void ADBMS6830_rdsv_all(SPI_HandleTypeDef* const hspi_ptr,               // Poin
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 4; reg++) {
+
 		if (ADBMS6830_wakeup_necessary()) {
 			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
 		}
@@ -920,6 +933,11 @@ void ADBMS6830_rdsv_all(SPI_HandleTypeDef* const hspi_ptr,               // Poin
 					int16_t parsed_voltage = (int16_t)((data[ic][(cell * 2) + 1] << 8) +
 														data[ic][cell * 2]);
 					s_voltages[ic][(reg * CELL_IN_REG) + cell] = parsed_voltage;
+				}
+			}
+			else {
+				for (uint8_t cell = 0; cell < CELL_IN_REG; cell++) {
+					s_voltages[ic][(reg * CELL_IN_REG) + cell] = 0;
 				}
 			}
 		}
@@ -1052,14 +1070,19 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* const hspi_ptr,       
 	const uint8_t TEMP_IN_REG = 3u; // 6 register bytes / 2 bytes per voltage = 3 temp voltages per register
 
 	// Wake up ICs if necessary
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	if (ADBMS6830_wakeup_necessary()) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 
 	// Freeze all result registers for data coherence
 	ADBMS6830_freeze_results(hspi_ptr, htim_ptr);
 
 	for (uint8_t reg = 0; reg < 3; reg++) {
 
-		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		// Wake up ICs if necessary
+		if (ADBMS6830_wakeup_necessary()) {
+			ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+		}
 
 		uint8_t data[N_OF_ADBMS][6];
 		ADBMS6830_rdaux_reg(hspi_ptr, htim_ptr, reg, data, spi_errors);
@@ -1074,10 +1097,19 @@ void ADBMS6830_rdaux_raw_temp_voltages(SPI_HandleTypeDef* const hspi_ptr,       
 					raw_temp_voltages[ic][(reg * TEMP_IN_REG) + temp] = parsed_voltage;
 				}
 			}
+			else {
+				for (uint8_t temp = 0; temp < TEMP_IN_REG; temp++) {
+					if ((reg == 2) && (temp == 2)) break;
+					raw_temp_voltages[ic][(reg * TEMP_IN_REG) + temp] = 0;
+				}
+			}
 		}
 	}
 
-	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	// Wake up ICs if necessary
+	if (ADBMS6830_wakeup_necessary()) {
+		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
+	}
 
 	ADBMS6830_unfreeze_results(hspi_ptr, htim_ptr);
 }

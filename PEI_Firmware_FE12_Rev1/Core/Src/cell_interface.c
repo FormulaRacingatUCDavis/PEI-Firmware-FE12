@@ -68,8 +68,10 @@ void cell_interface_init(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* c
 }
 
 void set_voltage(uint8_t subpack_num, uint8_t cell_num, int16_t voltage_raw) {
-	bat_pack.subpacks[subpack_num].cells[cell_num].voltage_raw = voltage_raw;
-	bat_pack.subpacks[subpack_num].cells[cell_num].voltage = (voltage_raw * 0.00015) + 1.5;
+	if (voltage_raw != 0) {
+		bat_pack.subpacks[subpack_num].cells[cell_num].voltage_raw = voltage_raw;
+		bat_pack.subpacks[subpack_num].cells[cell_num].voltage = (voltage_raw * 0.00015) + 1.5;
+	}
 }
 
 float get_voltage(uint8_t subpack_num, uint8_t cell_num) {
@@ -81,13 +83,15 @@ int16_t get_voltage_raw(uint8_t subpack_num, uint8_t cell_num) {
 }
 
 void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw) {
-	bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw = temp_raw;
+	if (temp_raw != 0) {
+		bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw = temp_raw;
 
-	float temp_voltage = (temp_raw * 0.00015) + 1.5;
-	float temp = (1.0 / ((1.0 / 298.15) + ((1.0 / 3934.0) * log(temp_voltage / (3 - temp_voltage)))))
-				  - 273.15;
+		float temp_voltage = (temp_raw * 0.00015) + 1.5;
+		float temp = (1.0 / ((1.0 / 298.15) + ((1.0 / 3934.0) * log(temp_voltage / (3 - temp_voltage)))))
+					  - 273.15;
 
-	bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_c = temp;
+		bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_c = temp;
+	}
 }
 
 float get_cell_temp(uint8_t subpack_num, uint8_t temp_num) {
@@ -295,13 +299,15 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 //					bat_pack.status |= MISMATCH;
 //				}
 
-				float percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
-				if (percent_difference < 0) percent_difference = -percent_difference;
-				if (percent_difference > 0.125) {
-					bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]++;
-					if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]
-						> ERROR_VOLTAGE_LIMIT) {
-						bat_pack.status |= OPEN_WIRE;
+				if ((open_wire_voltage != 0) && (baseline_voltage != 0)) {
+					float percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
+					if (percent_difference < 0) percent_difference = -percent_difference;
+					if (percent_difference > 0.125) {
+						bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]++;
+						if (bat_pack.subpacks[subpack].cells[subpack_cell_num].bad_counters[FUSE_BLOWN]
+							> ERROR_VOLTAGE_LIMIT) {
+							bat_pack.status |= OPEN_WIRE;
+						}
 					}
 				}
 			}
