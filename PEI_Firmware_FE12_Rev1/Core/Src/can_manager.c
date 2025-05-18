@@ -233,8 +233,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 		ticks_since_vcu_message = 0;
 		vcu_attached = 1;
 
-		hv_requested = CAN_RX0_BUFFER[1];
-		vcu_state = CAN_RX0_BUFFER[5];
+		hv_requested = CAN_RX0_BUFFER[0];
+		vcu_state = CAN_RX0_BUFFER[4];
 
 		bat_pack.status &= ~CHARGEMODE;
 	}
