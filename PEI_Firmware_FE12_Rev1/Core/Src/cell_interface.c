@@ -376,6 +376,12 @@ void process_temps() {
 	float min_temp_c = TEMP_IGNORE_LIMIT;
 	uint8_t num_bad_temp = 0;
 
+	// Spoof bad temps
+	bat_pack.subpacks[2].cell_temps[0].temp_c = 0;
+	bat_pack.subpacks[2].cell_temps[3].temp_c = 0;
+	bat_pack.subpacks[2].cell_temps[4].temp_c = 0;
+	bat_pack.subpacks[2].cell_temps[7].temp_c = 0;
+
 	// Check each cell temp
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 		for (uint8_t temp = 0; temp < CELL_TEMPS_PER_SUBPACK; temp++) {
