@@ -226,7 +226,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_ADC3_Init();
   MX_SPI5_Init();
-  //MX_IWDG_Init();
+  MX_IWDG_Init();
   MX_CAN2_Init();
   MX_TIM10_Init();
   MX_TIM2_Init();
