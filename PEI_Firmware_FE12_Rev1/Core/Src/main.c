@@ -54,7 +54,6 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc2;
 ADC_HandleTypeDef hadc3;
-DMA_HandleTypeDef hdma_adc3;
 
 CAN_HandleTypeDef hcan1;
 CAN_HandleTypeDef hcan2;
@@ -102,8 +101,6 @@ volatile uint32_t ticks_since_vcu_message = 0;
 volatile uint32_t ticks_since_mc_message = 0;
 volatile uint32_t ticks_since_charger_message = 0;
 
-// Buffer to store raw ADC measurements
-static uint32_t ADC_RES_BUFFER[2];
 static uint8_t is_first_measurement = 1;
 
 /* USER CODE END PV */
@@ -111,7 +108,6 @@ static uint8_t is_first_measurement = 1;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_USART3_UART_Init(void);
@@ -152,13 +148,27 @@ static float mvolts_to_amps(float mVolts, float mVolt_ref) {
 }
 
 static void update_current() {
-	/*
-	 * Start ADC conversion to measure current.
-	 *
-	 * Conversion from raw ADC measurement to current value in Amps
-	 * is handled in the resulting DMA interrupt.
-	 */
-	HAL_ADC_Start_DMA(&hadc3, ADC_RES_BUFFER, 2);
+	HAL_ADC_Start(&hadc3); // Start conversion
+
+	// Wait for conversion to complete
+	HAL_ADC_PollForConversion(&hadc3, HAL_MAX_DELAY);
+
+	// Move raw measurements into bat_pack struct
+	uint16_t raw = HAL_ADC_GetValue(&hadc3);
+	bat_pack.current_raw = raw;
+
+	// Calculate current in Amps
+	static float mVolt_ref;
+	if (is_first_measurement) {
+		bat_pack.current_ref_raw = raw;
+		mVolt_ref = raw_to_mvolts(raw);
+		is_first_measurement = 0;
+	}
+
+	float mVolts = raw_to_mvolts(raw);
+
+	// Move calculated current into bat_pack struct
+	bat_pack.current = mvolts_to_amps(mVolts, mVolt_ref);
 }
 
 static void set_back_fans(float duty_cycle) {
@@ -167,27 +177,6 @@ static void set_back_fans(float duty_cycle) {
 
 static void set_side_fans(float duty_cycle) {
 	htim2.Instance->CCR2 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
-}
-
-// Called when ADC conversion and DMA transfer is complete
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc) {
-	// Move raw measurements into bat_pack struct
-	bat_pack.current_raw = ADC_RES_BUFFER[0];
-	//bat_pack.current_ref_raw = ADC_RES_BUFFER[1];
-
-	// Calculate current in Amps
-	//float mVolt_ref = raw_to_mvolts(ADC_RES_BUFFER[1]);
-	static float mVolt_ref;
-	if (is_first_measurement) {
-		bat_pack.current_raw = ADC_RES_BUFFER[0];
-		mVolt_ref = raw_to_mvolts(ADC_RES_BUFFER[0]);
-		is_first_measurement = 0;
-	}
-
-	float mVolts = raw_to_mvolts(ADC_RES_BUFFER[0]);
-
-	// Move calculated current into bat_pack struct
-	bat_pack.current = mvolts_to_amps(mVolts, mVolt_ref);
 }
 /* USER CODE END 0 */
 
@@ -220,7 +209,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_ADC2_Init();
   MX_CAN1_Init();
   MX_USART3_UART_Init();
@@ -554,9 +542,9 @@ static void MX_ADC3_Init(void)
   hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc3.Init.NbrOfConversion = 2;
+  hadc3.Init.NbrOfConversion = 1;
   hadc3.Init.DMAContinuousRequests = DISABLE;
-  hadc3.Init.EOCSelection = ADC_EOC_SEQ_CONV;
+  hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc3) != HAL_OK)
   {
     Error_Handler();
@@ -567,15 +555,6 @@ static void MX_ADC3_Init(void)
   sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
-  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-  */
-  sConfig.Channel = ADC_CHANNEL_8;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -914,22 +893,6 @@ static void MX_USART3_UART_Init(void)
   /* USER CODE BEGIN USART3_Init 2 */
 
   /* USER CODE END USART3_Init 2 */
-
-}
-
-/**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA2_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
 }
 
