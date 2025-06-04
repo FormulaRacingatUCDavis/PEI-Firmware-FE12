@@ -15,8 +15,6 @@
 extern CAN_HandleTypeDef hcan1;
 extern CAN_HandleTypeDef hcan2;
 
-extern int8_t comm_bk_id;
-
 extern volatile uint8_t hv_requested;
 extern volatile uint8_t vcu_state;
 extern volatile uint16_t vcu_attached;
@@ -36,6 +34,9 @@ extern uint8_t charge_control;
 extern volatile uint32_t ticks_since_charger_message;
 
 extern volatile BAT_PACK_t bat_pack;
+extern uint8_t max_fault_addr;
+extern uint8_t max_faults;
+extern int8_t comm_bk_id;
 
 volatile uint32_t vcu_tickstart = 0;
 volatile uint32_t mc_tickstart = 0;
@@ -116,12 +117,15 @@ void can_send_BMS_Status() {
 	tx_header.StdId = BMS_STATUS_MSG_ID;
 	tx_header.DLC = 5;
 
+	update_max_fault_data();
+
 	uint8_t tx_data[8];
 	tx_data[0] = bat_pack.status;
 	tx_data[1] = HI8(bat_pack.spi_fault_addresses);
 	tx_data[2] = LO8(bat_pack.spi_fault_addresses);
-	tx_data[3] = get_max_fault_ic_addr();
-	tx_data[4] = (uint8_t)comm_bk_id;
+	tx_data[3] = max_fault_addr;
+	tx_data[4] = max_faults;
+	tx_data[5] = (uint8_t)comm_bk_id;
 
 	HAL_CAN_AddTxMessage(&hcan1, &tx_header, tx_data, &BMS_STATUS_TX_MAILBOX);
 }

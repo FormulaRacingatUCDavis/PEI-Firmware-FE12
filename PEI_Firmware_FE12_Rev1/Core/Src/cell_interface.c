@@ -17,6 +17,8 @@ static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
 static const uint8_t SPI_ERROR_LIMIT = 100u;
 
+uint8_t max_fault_addr;
+uint8_t max_faults;
 int8_t comm_bk_id = -1;
 
 volatile BAT_PACK_t bat_pack;
@@ -464,9 +466,9 @@ void balance_cells(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const h
 	ADBMS6830_wrpwma(hspi_ptr, htim_ptr);
 }
 
-uint8_t get_max_fault_ic_addr() {
-	uint8_t max_faults = bat_pack.spi_error_counters[0];
-	uint8_t max_fault_addr = 0;
+void update_max_fault_data() {
+	max_faults = bat_pack.spi_error_counters[0];
+	max_fault_addr = 0;
 
 	for (uint8_t ic = 1; ic < N_OF_ADBMS; ic++) {
 		uint8_t num_faults = bat_pack.spi_error_counters[ic];
@@ -476,8 +478,6 @@ uint8_t get_max_fault_ic_addr() {
 			max_fault_addr = ic;
 		}
 	}
-
-	return max_fault_addr;
 }
 
 BMS_MODE_t bat_health_check() {

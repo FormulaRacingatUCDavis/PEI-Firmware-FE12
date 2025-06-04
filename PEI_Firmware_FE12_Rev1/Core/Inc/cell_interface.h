@@ -100,7 +100,7 @@ void process_temps();
 void disable_cell_balancing(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 void balance_cells(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 
-uint8_t get_max_fault_ic_addr();
+void update_max_fault_data();
 BMS_MODE_t bat_health_check();
 
 #endif /* INC_CELL_INTERFACE_H_ */
