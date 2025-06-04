@@ -300,7 +300,7 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 //					bat_pack.status |= MISMATCH;
 //				}
 
-				if ((open_wire_voltage != 0) && (baseline_voltage != 0)) {
+				if ((open_wire_voltage != 1.5) && (baseline_voltage != 1.5)) { // voltage is 1.5 V when raw ADC value is 0
 					float percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
 					if (percent_difference < 0) percent_difference = -percent_difference;
 					if (percent_difference > 0.125) {
