@@ -11,7 +11,6 @@
 #include "cell_interface.h"
 #include "ADBMS6830.h"
 #include "utils.h"
-#include "main.h"
 
 static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
