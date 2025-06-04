@@ -11,15 +11,16 @@
 #include "cell_interface.h"
 #include "ADBMS6830.h"
 #include "utils.h"
-#include "main.h"
 
 static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
 static const uint8_t SPI_ERROR_LIMIT = 100u;
+static const uint32_t SPI_FAULT_REFRESH_THRESHOLD = 5000u;
 
 uint8_t max_fault_addr;
 uint8_t max_faults;
 int8_t comm_bk_id = -1;
+uint32_t spi_fault_refresh_tickstart = 0;
 
 volatile BAT_PACK_t bat_pack;
 
@@ -110,8 +111,18 @@ static void update_spi_errors(SPI_HandleTypeDef* const hspi_ptr,
 	static uint8_t comm_bk_present = 0;
 	static uint8_t comm_bk_enabled = 0;
 
+	uint8_t refresh = 0;
+
+	if ((HAL_GetTick() - spi_fault_refresh_tickstart) > SPI_FAULT_REFRESH_THRESHOLD) {
+		refresh = 1;
+		spi_fault_refresh_tickstart = HAL_GetTick();
+	}
+	else {
+		refresh = 0;
+	}
+
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
-		bat_pack.spi_error_counters[ic] += spi_errors[ic];
+		bat_pack.spi_error_counters[ic] = refresh ? 0 : bat_pack.spi_error_counters[ic] + spi_errors[ic];
 		if (bat_pack.spi_error_counters[ic] > SPI_ERROR_LIMIT) {
 			bat_pack.status |= SPI_FAULT;
 			bat_pack.spi_fault_addresses |= 0x01 << ic;
@@ -301,7 +312,7 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 //					bat_pack.status |= MISMATCH;
 //				}
 
-				if ((open_wire_voltage != 0) && (baseline_voltage != 0)) {
+				if ((open_wire_voltage != 1.5) && (baseline_voltage != 1.5)) { // voltage is 1.5 V when raw ADC value is 0
 					float percent_difference = (open_wire_voltage - baseline_voltage) / baseline_voltage;
 					if (percent_difference < 0) percent_difference = -percent_difference;
 					if (percent_difference > 0.125) {
