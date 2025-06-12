@@ -10,12 +10,12 @@
 #include "cell_interface.h"
 
 const Charge_Profile_t ESDC = {
-		.charger_max_current = 36, // 120V * 15A = 1800W | 1800W / 504V = 3.6A
+		.charger_max_current = 30, // 120V * 15A = 1800W | 1800W / 504V = 3A
 		.attenuation_threshold = 95 // 95% SOC
 };
 
 const Charge_Profile_t COMP = {
-		.charger_max_current = 82, // 208V * 20A = 4160W | 4160W / 504V = 8.2A
+		.charger_max_current = 80, // 208V * 20A = 4160W | 4160W / 504V = 8A
 		.attenuation_threshold = 80 // 80% SOC
 };
 
