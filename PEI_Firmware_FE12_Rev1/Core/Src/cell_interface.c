@@ -390,10 +390,14 @@ void process_temps() {
 	uint8_t num_bad_temp = 0;
 
 	// Spoof bad temps
-	bat_pack.subpacks[2].cell_temps[0].temp_c = 0;
-	bat_pack.subpacks[2].cell_temps[3].temp_c = 0;
-	bat_pack.subpacks[2].cell_temps[4].temp_c = 0;
-	bat_pack.subpacks[2].cell_temps[7].temp_c = 0;
+	bat_pack.subpacks[2].cell_temps[0].temp_c = bat_pack.AVG_temp_c;
+	bat_pack.subpacks[2].cell_temps[1].temp_c = bat_pack.AVG_temp_c;
+	bat_pack.subpacks[2].cell_temps[2].temp_c = bat_pack.AVG_temp_c;
+	bat_pack.subpacks[2].cell_temps[3].temp_c = bat_pack.AVG_temp_c;
+	bat_pack.subpacks[2].cell_temps[4].temp_c = bat_pack.AVG_temp_c;
+	bat_pack.subpacks[2].cell_temps[5].temp_c = bat_pack.AVG_temp_c;
+	bat_pack.subpacks[2].cell_temps[6].temp_c = bat_pack.AVG_temp_c;
+	bat_pack.subpacks[2].cell_temps[7].temp_c = bat_pack.AVG_temp_c;
 
 	// Check each cell temp
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
