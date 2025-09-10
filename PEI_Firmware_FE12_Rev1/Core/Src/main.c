@@ -63,6 +63,7 @@ IWDG_HandleTypeDef hiwdg;
 SPI_HandleTypeDef hspi5;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart3;
@@ -117,6 +118,7 @@ static void MX_IWDG_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_TIM10_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM6_Init(void);
 /* USER CODE BEGIN PFP */
 static void BMS_Init();
 static float raw_to_mvolts(uint16_t adc_raw);
@@ -126,6 +128,7 @@ static void set_back_fans(float duty_cycle);
 static void set_side_fans(float duty_cycle);
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc);
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -178,6 +181,18 @@ static void set_back_fans(float duty_cycle) {
 static void set_side_fans(float duty_cycle) {
 	htim2.Instance->CCR2 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
 }
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
+	// Send cell voltages and temps once a second
+	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+		for (uint8_t group = 0; group < 8; group++) {
+			can_send_BMS_Voltages(subpack, group);
+		}
+		for (uint8_t group = 0; group < 6; group++) {
+			can_send_BMS_Temps(subpack, group);
+		}
+	}
+}
 /* USER CODE END 0 */
 
 /**
@@ -218,8 +233,10 @@ int main(void)
   MX_CAN2_Init();
   MX_TIM10_Init();
   MX_TIM2_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim10);
+  HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   LCD_Init(&htim10);
@@ -229,7 +246,6 @@ int main(void)
 
   BMS_MODE_t bms_status = BMS_NORMAL;
   uint32_t cell_disconnect_check_tickstart = HAL_GetTick();
-  uint32_t BMS_low_level_data_send_tickstart = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -378,24 +394,6 @@ int main(void)
 		  can_send_BMS_Status();
 		  can_send_BMS_Diagnostics();
 		  can_send_BMS_High_Level_Data();
-
-		  // Send all raw BMS voltages and temps once a minute
-		  if ((HAL_GetTick() - BMS_low_level_data_send_tickstart) > 60000) {
-			  for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-
-				  // Send voltages
-				  for (uint8_t group = 0; group < 8; group++) {
-					  can_send_BMS_Voltages(subpack, group);
-				  }
-
-				  // Send temps
-				  for (uint8_t group = 0; group < 6; group++) {
-					  can_send_BMS_Temps(subpack, group);
-				  }
-			  }
-
-			  BMS_low_level_data_send_tickstart = HAL_GetTick();
-		  }
 	  }
 
 	  uart_send_GUI_Data(&huart3);
@@ -830,6 +828,44 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 54000-1;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 999;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
   * @brief TIM10 Initialization Function
   * @param None
   * @retval None
@@ -1020,8 +1056,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
