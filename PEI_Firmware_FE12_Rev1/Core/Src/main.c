@@ -103,7 +103,7 @@ volatile uint32_t ticks_since_mc_message = 0;
 volatile uint32_t ticks_since_charger_message = 0;
 
 // Buffer to store raw ADC measurements
-static uint32_t ADC_RES_BUFFER[2];
+static volatile uint32_t ADC_RES_BUFFER[2];
 static uint8_t is_first_measurement = 1;
 
 /* USER CODE END PV */
