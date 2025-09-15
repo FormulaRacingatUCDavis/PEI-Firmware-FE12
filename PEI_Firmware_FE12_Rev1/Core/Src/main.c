@@ -32,6 +32,7 @@
 #include "relays.h"
 #include "LCD.h"
 #include "display.h"
+#include "delays.h"
 #include "data.h"
 
 /* USER CODE END Includes */
@@ -183,14 +184,22 @@ static void set_side_fans(float duty_cycle) {
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
-	// Send cell voltages and temps once a second
+	// Send cell voltages once a second (delay 1 ms so we don't spam the bus)
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 		for (uint8_t group = 0; group < 8; group++) {
 			can_send_BMS_Voltages(subpack, group);
+			delay_us(&htim10, 1000);
 		}
+		delay_us(&htim10, 1000);
+	}
+
+	// Send cell temps once a second (delay 1 ms so we don't spam the bus)
+	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 		for (uint8_t group = 0; group < 6; group++) {
 			can_send_BMS_Temps(subpack, group);
+			delay_us(&htim10, 1000);
 		}
+		delay_us(&htim10, 1000);
 	}
 }
 /* USER CODE END 0 */
