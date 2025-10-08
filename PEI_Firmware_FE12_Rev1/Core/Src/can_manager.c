@@ -75,13 +75,13 @@ void can_send_PEI_Current() {
 	CAN_TxHeaderTypeDef tx_header;
 	set_tx_header_defaults(&tx_header);
 	tx_header.StdId = PEI_CURRENT_MSG_ID;
-	tx_header.DLC = 4;
+	tx_header.DLC = 2;
+
+	int16_t current = bat_pack.current * 100; // 2 decimals of precision
 
 	uint8_t tx_data[8];
-	tx_data[0] = HI8(bat_pack.current_raw);
-	tx_data[1] = LO8(bat_pack.current_raw);
-	tx_data[2] = HI8(bat_pack.current_ref_raw);
-	tx_data[3] = LO8(bat_pack.current_ref_raw);
+	tx_data[0] = HI8(current);
+	tx_data[1] = LO8(current);
 
 	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &PEI_CURRENT_TX_MAILBOX);
 }
@@ -159,11 +159,14 @@ void can_send_BMS_High_Level_Data() {
 	tx_header.StdId = BMS_HIGH_LEVEL_DATA_MSG_ID;
 	tx_header.DLC = 4;
 
+	uint16_t HI_temp_c = bat_pack.HI_temp_c * 1000; // 3 decimals of precision
+	uint16_t total_voltage = bat_pack.total_voltage * 100; // 2 decimals of precision
+
 	uint8_t tx_data[8];
-	tx_data[0] = HI8(bat_pack.HI_temp_raw);
-	tx_data[1] = LO8(bat_pack.HI_temp_raw);
-	tx_data[2] = HI8(bat_pack.total_voltage_raw);
-	tx_data[3] = LO8(bat_pack.total_voltage_raw);
+	tx_data[0] = HI8(HI_temp_c);
+	tx_data[1] = LO8(HI_temp_c);
+	tx_data[2] = HI8(total_voltage);
+	tx_data[3] = LO8(total_voltage);
 
 	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_HIGH_LEVEL_DATA_TX_MAILBOX);
 }
@@ -178,10 +181,11 @@ void can_send_BMS_Voltages(uint8_t subpack_num, uint8_t group) {
 	tx_header.StdId = BMS_VOLTAGES_MSG_ID;
 	tx_header.DLC = 8;
 
+	// Convert voltages to int, but add 2 decimals of precision by multiplying by 100
 	uint8_t starting_cell = group * 3;
-	int16_t voltage1 = bat_pack.subpacks[subpack_num].cells[starting_cell].voltage_raw;
-	int16_t voltage2 = bat_pack.subpacks[subpack_num].cells[starting_cell + 1].voltage_raw;
-	int16_t voltage3 = bat_pack.subpacks[subpack_num].cells[starting_cell + 2].voltage_raw;
+	uint16_t voltage1 = get_voltage(subpack_num, starting_cell) * 100;
+	uint16_t voltage2 = get_voltage(subpack_num, starting_cell + 1) * 100;
+	uint16_t voltage3 = get_voltage(subpack_num, starting_cell + 2) * 100;
 
 	uint8_t tx_data[8];
 	tx_data[0] = subpack_num;
@@ -206,12 +210,11 @@ void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
 	tx_header.StdId = BMS_TEMPS_MSG_ID;
 	tx_header.DLC = 8;
 
+	// Convert temps to int, but add 3 decimals of precision by multiplying by 1000
 	uint8_t starting_cell = group * 3;
-	int16_t temp1 = bat_pack.subpacks[subpack_num].cell_temps[starting_cell].temp_raw;
-	int16_t temp2 = group < 5 ?
-			bat_pack.subpacks[subpack_num].cell_temps[starting_cell + 1].temp_raw : 0;
-	int16_t temp3 = group < 5 ?
-			bat_pack.subpacks[subpack_num].cell_temps[starting_cell + 2].temp_raw : 0;
+	uint16_t temp1 = get_cell_temp(subpack_num, starting_cell) * 1000;
+	uint16_t temp2 = group < 5 ? get_cell_temp(subpack_num, starting_cell + 1) * 1000 : 0;
+	uint16_t temp3 = group < 5 ? get_cell_temp(subpack_num, starting_cell + 2) * 1000 : 0;
 
 	uint8_t tx_data[8];
 	tx_data[0] = subpack_num;

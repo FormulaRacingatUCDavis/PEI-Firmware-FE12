@@ -53,7 +53,6 @@ static void pack_init() {
 	bat_pack.LO_voltage = 0;
 	bat_pack.current_raw = 0;
 	bat_pack.current = 0;
-	bat_pack.HI_temp_raw = 0;
 	bat_pack.HI_temp_c = 0;
 	bat_pack.SOC_percent = 0;
 
@@ -407,7 +406,6 @@ void process_temps() {
 			if (temp_c < TEMP_IGNORE_LIMIT) {
 				if (max_temp_c < temp_c) {
 					max_temp_c = temp_c;
-					max_temp_raw = get_cell_temp_raw(subpack, temp);
 				}
 				if (temp_c != 0) {
 					if (min_temp_c > temp_c) min_temp_c = temp_c;
@@ -444,7 +442,6 @@ void process_temps() {
 	avg_temp_c /= N_OF_TEMP_CELL - num_bad_temp;
 
 	bat_pack.AVG_temp_c = avg_temp_c;
-	bat_pack.HI_temp_raw = max_temp_raw;
 	bat_pack.HI_temp_c = max_temp_c;
 	bat_pack.LO_temp_c = min_temp_c;
 }

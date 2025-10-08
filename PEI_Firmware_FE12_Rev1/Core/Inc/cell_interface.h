@@ -66,8 +66,7 @@ typedef struct {
 	uint16_t current_raw;
 	float current;
 
-	int16_t HI_temp_raw;
-	uint8_t HI_temp_c;
+	float HI_temp_c;
 	uint8_t AVG_temp_c;
 	uint8_t LO_temp_c;
 
