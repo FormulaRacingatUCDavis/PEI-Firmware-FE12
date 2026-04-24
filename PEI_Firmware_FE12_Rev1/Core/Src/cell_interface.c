@@ -11,6 +11,7 @@
 #include "cell_interface.h"
 #include "ADBMS6830.h"
 #include "utils.h"
+#include "can_manager.h"
 
 static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
@@ -113,6 +114,8 @@ static void update_spi_errors(SPI_HandleTypeDef* const hspi_ptr,
 	uint8_t refresh = 0;
 
 	if ((HAL_GetTick() - spi_fault_refresh_tickstart) > SPI_FAULT_REFRESH_THRESHOLD) {
+		can_send_BMS_Status();
+
 		refresh = 1;
 		spi_fault_refresh_tickstart = HAL_GetTick();
 	}

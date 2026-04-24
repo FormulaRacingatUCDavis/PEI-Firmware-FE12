@@ -400,7 +400,7 @@ int main(void)
 		  can_send_PEI_Status(shutdown_flags);
 		  can_send_PEI_Current();
 
-		  can_send_BMS_Status();
+		  //can_send_BMS_Status();
 		  can_send_BMS_Diagnostics();
 		  can_send_BMS_High_Level_Data();
 	  }
