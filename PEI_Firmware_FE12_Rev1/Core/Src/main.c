@@ -362,13 +362,15 @@ int main(void)
 			  finish_precharge();
 
 			  if (charger_attached) {
-				  charge_profile_received = uart_receive_charge_profile(&huart3);
-				  if (charge_profile_received) {
-					  update_max_charge_current();
-				  }
-				  if (charger_max_current != 0) {
-					  charge_control = CHARGE_START;
-				  }
+//				  charge_profile_received = uart_receive_charge_profile(&huart3);
+//				  if (charge_profile_received) {
+//					  update_max_charge_current();
+//				  }
+//				  if (charger_max_current != 0) {
+//					  charge_control = CHARGE_START;
+//				  }
+				  charger_max_current = 30;
+				  charge_control = CHARGE_START;
 			  }
 
 			  if (!hv_request()) {
