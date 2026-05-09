@@ -163,30 +163,23 @@ static void single_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to th
 							 uint8_t data[N_OF_ADBMS][6]        // 2D array storing data bytes for each IC (can be set to NULL if not a write command)
 							 ) {
 	uint8_t tx_len_main = 4; // 2 command bytes + 2 PEC bytes
-	uint8_t tx_len_aux = 4;
 	if (data != NULL) {
-		tx_len_main += (N_OF_ADBMS - 2) * 8; // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
-		tx_len_aux += 16;
+		tx_len_main += N_OF_ADBMS * 8; // For write commands, there will always be 8 bytes per IC (6 register bytes + 2 PEC bytes)
 	}
 	uint8_t tx_data_main[tx_len_main];
-	uint8_t tx_data_aux[tx_len_aux];
 
 	tx_data_main[0] = cmd[0];
 	tx_data_main[1] = cmd[1];
-	tx_data_aux[0] = cmd[0];
-	tx_data_aux[1] = cmd[1];
 
 	uint16_t cmd_pec = cmd_pec_calc(cmd);
 	tx_data_main[2] = HI8(cmd_pec);
 	tx_data_main[3] = LO8(cmd_pec);
-	tx_data_aux[2] = HI8(cmd_pec);
-	tx_data_aux[3] = LO8(cmd_pec);
 
 	if (data != NULL) {
 		uint8_t idx = 4;
 
 		// Data written to last IC in the chain first and first IC in the chain last (see bus protocols in datasheet)
-		for (int8_t ic = N_OF_ADBMS - 3; ic >= 0; ic--) {
+		for (int8_t ic = N_OF_ADBMS - 1; ic >= 0; ic--) {
 			uint16_t data_pec;
 
 			for (uint8_t i = 0; i < 6; i++) {
@@ -199,22 +192,6 @@ static void single_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to th
 			tx_data_main[idx + 1] = LO8(data_pec);
 			idx += 2;
 		}
-
-		idx = 4;
-
-		for (int8_t ic = N_OF_ADBMS - 1; ic > N_OF_ADBMS - 3; ic--) {
-			uint16_t data_pec;
-
-			for (uint8_t i = 0; i < 6; i++) {
-				tx_data_aux[idx] = data[ic][i];
-				idx++;
-			}
-
-			data_pec = data_pec_calc(data[ic], 0);
-			tx_data_aux[idx] = HI8(data_pec);
-			tx_data_aux[idx + 1] = LO8(data_pec);
-			idx += 2;
-		}
 	}
 
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
@@ -224,15 +201,6 @@ static void single_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to th
 	delay_500_ns(htim_ptr);
 
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
-
-	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_RESET);
-	delay_500_ns(htim_ptr);
-
-	HAL_SPI_Transmit(hspi_ptr, tx_data_aux, tx_len_aux, 100);
-	delay_500_ns(htim_ptr);
-
-	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_SET);
-	delay_us(htim_ptr, 1);
 }
 
 // SPI write for when we are using transceivers in the forward and reverse directions
@@ -360,9 +328,8 @@ static uint8_t single_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Point
 	tx_data[2] = HI8(cmd_pec);
 	tx_data[3] = LO8(cmd_pec);
 
-	uint8_t rx_len_main = (N_OF_ADBMS - 2) * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
+	uint8_t rx_len_main = N_OF_ADBMS * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
 	uint8_t rx_data_flattened_main[rx_len_main]; // array to store data from all ICs
-	uint8_t rx_data_flattened_aux[16];
 
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
 	delay_500_ns(htim_ptr);
@@ -373,19 +340,9 @@ static uint8_t single_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Point
 
 	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
 
-	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_RESET);
-	delay_500_ns(htim_ptr);
-
-	HAL_SPI_Transmit(hspi_ptr, tx_data, 4, 100);
-	HAL_SPI_Receive(hspi_ptr, rx_data_flattened_aux, 16, 100);
-	delay_500_ns(htim_ptr);
-
-	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS2_Pin, GPIO_PIN_SET);
-	delay_us(htim_ptr, 1);
-
 	// Package data (excluding PEC) into 2D array and process PECs
 	// Data read from first IC in the chain first and last IC in the chain last (see bus protocols in datasheet)
-	for (uint8_t ic = 0; ic < N_OF_ADBMS - 2; ic++) {
+	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		for (uint8_t i = 0; i < 6; i++) {
 			rx_data[ic][i] = rx_data_flattened_main[(ic * 8) + i];
 		}
@@ -394,27 +351,6 @@ static uint8_t single_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Point
 		uint16_t received_pec = (rx_data_flattened_main[(ic * 8) + 6] & 0x03) << 8;
 		received_pec += rx_data_flattened_main[(ic * 8) + 7];
 		uint8_t received_cmd_count = (rx_data_flattened_main[(ic * 8) + 6] & 0xFC) >> 2;
-
-		if (data_pec != received_pec) {
-			no_errors = 0;
-			pec_mismatches[ic] = 1;
-		}
-		else {
-			pec_mismatches[ic] = 0;
-		}
-
-		cmd_counter[ic] = received_cmd_count;
-	}
-
-	for (uint8_t ic = N_OF_ADBMS - 2; ic < N_OF_ADBMS; ic++) {
-		for (uint8_t i = 0; i < 6; i++) {
-			rx_data[ic][i] = rx_data_flattened_aux[((ic - (N_OF_ADBMS - 2)) * 8) + i];
-		}
-
-		uint16_t data_pec = data_pec_calc(rx_data[ic], cmd_counter[ic]);
-		uint16_t received_pec = (rx_data_flattened_aux[((ic - (N_OF_ADBMS - 2)) * 8) + 6] & 0x03) << 8;
-		received_pec += rx_data_flattened_aux[((ic - (N_OF_ADBMS - 2)) * 8) + 7];
-		uint8_t received_cmd_count = (rx_data_flattened_aux[((ic - (N_OF_ADBMS - 2)) * 8) + 6] & 0xFC) >> 2;
 
 		if (data_pec != received_pec) {
 			no_errors = 0;
