@@ -281,11 +281,14 @@ int main(void)
 			  bms_status = bat_health_check();
 
 			  // Check if we're charging accumulator
-			  if(charger_attached && (pei_state == PEI_HV)){
-				  balance_cells(&hspi5, &htim10);
-			  } else {
-				  disable_cell_balancing(&hspi5, &htim10);
-			  }
+//			  if(charger_attached && (pei_state == PEI_HV)){
+//				  balance_cells(&hspi5, &htim10);
+//			  } else {
+//				  disable_cell_balancing(&hspi5, &htim10);
+//			  }
+
+			  // No cell balancing for single-subpack charging with power supply
+			  disable_cell_balancing(&hspi5, &htim10);
 
 			  break;
 
