@@ -17,11 +17,13 @@ static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
 static const uint8_t SPI_ERROR_LIMIT = 100u;
 static const uint32_t SPI_FAULT_REFRESH_THRESHOLD = 5000u;
+static const uint32_t VOLTAGE_FAULT_REFRESH_THRESHOLD = 5000u;
 
 uint8_t max_fault_addr;
 uint8_t max_faults;
 int8_t comm_bk_id = -1;
 uint32_t spi_fault_refresh_tickstart = 0;
+uint32_t voltage_fault_refresh_tickstart = 0;
 
 volatile BAT_PACK_t bat_pack;
 
@@ -339,6 +341,16 @@ void process_voltages() {
 	float min_voltage = 7; // Largest voltage that can be read by ADC is 6.41505 V
 	int16_t min_voltage_raw = 0;
 	float total_voltage = 0;
+
+	if ((HAL_GetTick() - voltage_fault_refresh_tickstart) > VOLTAGE_FAULT_REFRESH_THRESHOLD) {
+		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+			for (uint8_t cell = 0; cell < CELLS_PER_SUBPACK; cell++) {
+				bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT] = 0;
+				bat_pack.subpacks[subpack].cells[cell].bad_counters[UNDERVOLT] = 0;
+			}
+		}
+		voltage_fault_refresh_tickstart = HAL_GetTick();
+	}
 
 	// Check each cell
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
