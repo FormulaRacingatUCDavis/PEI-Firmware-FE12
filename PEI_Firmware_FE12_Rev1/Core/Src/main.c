@@ -186,10 +186,7 @@ static void set_side_fans(float duty_cycle) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
 	// Send cell voltages once a second (delay 1 ms so we don't spam the bus)
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-		for (uint8_t group = 0; group < 8; group++) {
-			can_send_BMS_Voltages(subpack, group);
-			delay_us(&htim10, 1000);
-		}
+		can_send_BMS_Subpack_Data(subpack);
 		delay_us(&htim10, 1000);
 	}
 

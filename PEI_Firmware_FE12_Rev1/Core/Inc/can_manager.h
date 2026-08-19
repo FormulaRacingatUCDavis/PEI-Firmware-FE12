@@ -21,7 +21,7 @@ void can_send_Charger();
 void can_send_BMS_Status();
 void can_send_BMS_Diagnostics();
 void can_send_BMS_High_Level_Data();
-void can_send_BMS_Voltages(uint8_t subpack_num, uint8_t group);
+void can_send_BMS_Subpack_Data(uint8_t subpack_num);
 void can_send_BMS_Filtered_Temps(uint8_t subpack_num, uint8_t group);
 
 void update_can_status();

@@ -20,8 +20,7 @@ static const uint32_t SPI_FAULT_REFRESH_THRESHOLD = 5000u;
 static const uint32_t VOLTAGE_FAULT_REFRESH_THRESHOLD = 5000u;
 
 static uint8_t is_first_run = 1;
-static uint32_t prev_temp_meas_tick = 0;
-static float smoothing_factor = 0.0;
+static float smoothing_factor = 0;
 
 uint8_t max_fault_addr;
 uint8_t max_faults;
@@ -55,8 +54,8 @@ static void pack_init() {
 	}
 
 	// Initialize pack values
-	bat_pack.total_voltage_raw = 0;
-	bat_pack.total_voltage = 0;
+	bat_pack.pack_voltage_raw = 0;
+	bat_pack.pack_voltage = 0;
 	bat_pack.LO_voltage = 0;
 	bat_pack.current_raw = 0;
 	bat_pack.current = 0;
@@ -214,6 +213,8 @@ void update_voltages(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const
 }
 
 void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
+	static uint32_t prev_temp_meas_tick = 0;
+
 	int16_t cell_temps[N_OF_ADBMS][CELL_TEMPS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
@@ -233,7 +234,7 @@ void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const ht
 		prev_temp_meas_tick = HAL_GetTick();
 
 		// dynamically calculate smoothing factor for digital LPF with cutoff at 2 Hz
-		smoothing_factor = 1.0 - exp(-1 * temp_sampling_period / 0.0796);
+		smoothing_factor = 1 - exp(-1 * temp_sampling_period / 0.0796);
 	}
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
@@ -361,7 +362,7 @@ void process_voltages() {
 	int16_t max_voltage_raw = 0;
 	float min_voltage = 7; // Largest voltage that can be read by ADC is 6.41505 V
 	int16_t min_voltage_raw = 0;
-	float total_voltage = 0;
+	float pack_voltage = 0;
 
 	if ((HAL_GetTick() - voltage_fault_refresh_tickstart) > VOLTAGE_FAULT_REFRESH_THRESHOLD) {
 		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
@@ -375,18 +376,25 @@ void process_voltages() {
 
 	// Check each cell
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+
+		float subpack_max_voltage = -4;
+		int16_t subpack_max_voltage_raw = 0;
+		float subpack_min_voltage = 7;
+		int16_t subpack_min_voltage_raw = 0;
+		float subpack_voltage = 0;
+
 		for (uint8_t cell = 0; cell < CELLS_PER_SUBPACK; cell++) {
 			float voltage = get_voltage(subpack, cell);
 
-			if (max_voltage < voltage) {
-				max_voltage = voltage;
-				max_voltage_raw = get_voltage_raw(subpack, cell);
+			if (subpack_max_voltage < voltage) {
+				subpack_max_voltage = voltage;
+				subpack_max_voltage_raw = get_voltage_raw(subpack, cell);
 			}
-			if (min_voltage > voltage) {
-				min_voltage = voltage;
-				min_voltage_raw = get_voltage_raw(subpack, cell);
+			if (subpack_min_voltage > voltage) {
+				subpack_min_voltage = voltage;
+				subpack_min_voltage_raw = get_voltage_raw(subpack, cell);
 			}
-			total_voltage += voltage;
+			subpack_voltage += voltage;
 
 			if (voltage > OVER_VOLTAGE) {
 				bat_pack.subpacks[subpack].cells[cell].bad_counters[OVERVOLT]++;
@@ -403,13 +411,27 @@ void process_voltages() {
 				}
 			}
 		}
+
+		if (max_voltage < subpack_max_voltage) {
+			max_voltage = subpack_max_voltage;
+			max_voltage_raw = subpack_max_voltage_raw;
+		}
+		if (min_voltage > subpack_min_voltage) {
+			min_voltage = subpack_min_voltage;
+			min_voltage_raw = subpack_min_voltage_raw;
+		}
+		pack_voltage += subpack_voltage;
+
+		bat_pack.subpacks[subpack].subpack_voltage = subpack_voltage;
+		bat_pack.subpacks[subpack].subpack_balance = subpack_max_voltage - subpack_min_voltage;
 	}
 
 	bat_pack.HI_voltage_raw = max_voltage_raw;
 	bat_pack.LO_voltage_raw = min_voltage_raw;
 	bat_pack.LO_voltage = min_voltage;
-	bat_pack.total_voltage = total_voltage;
-	bat_pack.total_voltage_raw = (total_voltage - (1.5 * N_OF_CELL)) / (0.00015 * N_OF_CELL);
+	bat_pack.pack_balance = max_voltage - min_voltage;
+	bat_pack.pack_voltage = pack_voltage;
+	bat_pack.pack_voltage_raw = (pack_voltage - (1.5 * N_OF_CELL)) / (0.00015 * N_OF_CELL);
 }
 
 void process_temps() {

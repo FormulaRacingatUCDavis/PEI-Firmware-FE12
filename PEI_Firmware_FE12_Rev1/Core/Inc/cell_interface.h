@@ -45,23 +45,26 @@ typedef struct {
 typedef struct {
 	float temp_c;
 	float filt_temp_c;
-
 	uint8_t bad_counters[2];
 } BAT_TEMP_t;
 
 typedef struct {
 	BAT_CELL_t cells[CELLS_PER_SUBPACK];
 	BAT_TEMP_t cell_temps[CELL_TEMPS_PER_SUBPACK];
+
+	float subpack_voltage;
+	float subpack_balance;
 } BAT_SUBPACK_t;
 
 typedef struct {
 	BAT_SUBPACK_t subpacks[N_OF_SUBPACK];
 
-	int16_t total_voltage_raw;
-	float total_voltage;
+	int16_t pack_voltage_raw;
+	float pack_voltage;
 	int16_t HI_voltage_raw;
 	int16_t LO_voltage_raw;
 	float LO_voltage;
+	float pack_balance;
 
 	uint16_t current_ref_raw;
 	uint16_t current_raw;
