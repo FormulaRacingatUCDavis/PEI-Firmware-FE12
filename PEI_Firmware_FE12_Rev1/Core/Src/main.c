@@ -196,7 +196,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
 	// Send cell temps once a second (delay 1 ms so we don't spam the bus)
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 		for (uint8_t group = 0; group < 6; group++) {
-			can_send_BMS_Temps(subpack, group);
+			can_send_BMS_Filtered_Temps(subpack, group);
 			delay_us(&htim10, 1000);
 		}
 		delay_us(&htim10, 1000);
@@ -270,10 +270,10 @@ int main(void)
 	  process_voltages();
 	  process_temps();
 
-	  if ((HAL_GetTick() - cell_disconnect_check_tickstart) > 1000) {
-		  cell_disconnect_check(&hspi5, &htim10);
-		  cell_disconnect_check_tickstart = HAL_GetTick();
-	  }
+//	  if ((HAL_GetTick() - cell_disconnect_check_tickstart) > 1000) {
+//		  cell_disconnect_check(&hspi5, &htim10);
+//		  cell_disconnect_check_tickstart = HAL_GetTick();
+//	  }
 
 	  switch (bms_status) {
 		  case BMS_NORMAL:

@@ -43,8 +43,9 @@ typedef struct {
 } BAT_CELL_t;
 
 typedef struct {
-	int16_t temp_raw;
 	float temp_c;
+	float filt_temp_c;
+
 	uint8_t bad_counters[2];
 } BAT_TEMP_t;
 
@@ -86,7 +87,7 @@ int16_t get_voltage_raw(uint8_t subpack_num, uint8_t cell_num);
 
 void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw);
 float get_cell_temp(uint8_t subpack_num, uint8_t temp_num);
-int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num);
+float get_filtered_cell_temp(uint8_t subpack_num, uint8_t temp_num);
 
 void update_voltages(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);
 void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr);

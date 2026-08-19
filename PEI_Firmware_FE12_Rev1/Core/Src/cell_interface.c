@@ -19,6 +19,10 @@ static const uint8_t SPI_ERROR_LIMIT = 100u;
 static const uint32_t SPI_FAULT_REFRESH_THRESHOLD = 5000u;
 static const uint32_t VOLTAGE_FAULT_REFRESH_THRESHOLD = 5000u;
 
+static uint8_t is_first_run = 1;
+static uint32_t prev_temp_meas_tick = 0;
+static float smoothing_factor = 0.0;
+
 uint8_t max_fault_addr;
 uint8_t max_faults;
 int8_t comm_bk_id = -1;
@@ -41,8 +45,8 @@ static void pack_init() {
 		}
 
 		for (uint8_t temp = 0; temp < CELL_TEMPS_PER_SUBPACK; temp++) {
-			bat_pack.subpacks[subpack].cell_temps[temp].temp_raw = 0;
 			bat_pack.subpacks[subpack].cell_temps[temp].temp_c = 0;
+			bat_pack.subpacks[subpack].cell_temps[temp].filt_temp_c = 0;
 
 			for (uint8_t i = 0; i < 2; i++) {
 				bat_pack.subpacks[subpack].cell_temps[temp].bad_counters[i] = 0;
@@ -89,13 +93,19 @@ int16_t get_voltage_raw(uint8_t subpack_num, uint8_t cell_num) {
 
 void set_cell_temp(uint8_t subpack_num, uint8_t temp_num, int16_t temp_raw) {
 	if (temp_raw != 0) {
-		bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw = temp_raw;
-
 		float temp_voltage = (temp_raw * 0.00015) + 1.5;
 		float temp = (1.0 / ((1.0 / 298.15) + ((1.0 / 3934.0) * log(temp_voltage / (3 - temp_voltage)))))
 					  - 273.15;
 
 		bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_c = temp;
+
+		if (is_first_run) bat_pack.subpacks[subpack_num].cell_temps[temp_num].filt_temp_c = temp;
+		else {
+			float prev_filt_temp = bat_pack.subpacks[subpack_num].cell_temps[temp_num].filt_temp_c;
+			float filt_temp = (smoothing_factor * temp) + ((1 - smoothing_factor) * prev_filt_temp);
+
+			bat_pack.subpacks[subpack_num].cell_temps[temp_num].filt_temp_c = filt_temp;
+		}
 	}
 }
 
@@ -103,8 +113,8 @@ float get_cell_temp(uint8_t subpack_num, uint8_t temp_num) {
 	return bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_c;
 }
 
-int16_t get_cell_temp_raw(uint8_t subpack_num, uint8_t temp_num) {
-	return bat_pack.subpacks[subpack_num].cell_temps[temp_num].temp_raw;
+float get_filtered_cell_temp(uint8_t subpack_num, uint8_t temp_num) {
+	return bat_pack.subpacks[subpack_num].cell_temps[temp_num].filt_temp_c;
 }
 
 static void update_spi_errors(SPI_HandleTypeDef* const hspi_ptr,
@@ -217,6 +227,15 @@ void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const ht
 	ADBMS6830_rdaux_raw_temp_voltages(hspi_ptr, htim_ptr, cell_temps, spi_errors);
 	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
 
+	if (is_first_run) prev_temp_meas_tick = HAL_GetTick();
+	else {
+		float temp_sampling_period = (HAL_GetTick() - prev_temp_meas_tick) / 1000.0;
+		prev_temp_meas_tick = HAL_GetTick();
+
+		// dynamically calculate smoothing factor for digital LPF with cutoff at 2 Hz
+		smoothing_factor = 1.0 - exp(-1 * temp_sampling_period / 0.0796);
+	}
+
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		// Move temps into bat_pack if no SPI error
 		if (!spi_errors[ic]) {
@@ -228,6 +247,8 @@ void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const ht
 			}
 		}
 	}
+
+	if (is_first_run) is_first_run = 0;
 }
 
 /*

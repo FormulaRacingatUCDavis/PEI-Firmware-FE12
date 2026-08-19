@@ -200,7 +200,7 @@ void can_send_BMS_Voltages(uint8_t subpack_num, uint8_t group) {
 	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_VOLTAGES_TX_MAILBOX);
 }
 
-void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
+void can_send_BMS_Filtered_Temps(uint8_t subpack_num, uint8_t group) {
 	const uint32_t BMS_TEMPS_MSG_ID = 0x384;
 	static uint32_t BMS_TEMPS_TX_MAILBOX;
 
@@ -212,9 +212,9 @@ void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
 
 	// Convert temps to int, but add 3 decimals of precision by multiplying by 1000
 	uint8_t starting_cell = group * 3;
-	uint16_t temp1 = get_cell_temp(subpack_num, starting_cell) * 1000;
-	uint16_t temp2 = group < 5 ? get_cell_temp(subpack_num, starting_cell + 1) * 1000 : 0;
-	uint16_t temp3 = group < 5 ? get_cell_temp(subpack_num, starting_cell + 2) * 1000 : 0;
+	uint16_t temp1 = get_filtered_cell_temp(subpack_num, starting_cell) * 1000;
+	uint16_t temp2 = group < 5 ? get_filtered_cell_temp(subpack_num, starting_cell + 1) * 1000 : 0;
+	uint16_t temp3 = group < 5 ? get_filtered_cell_temp(subpack_num, starting_cell + 2) * 1000 : 0;
 
 	uint8_t tx_data[8];
 	tx_data[0] = subpack_num;
