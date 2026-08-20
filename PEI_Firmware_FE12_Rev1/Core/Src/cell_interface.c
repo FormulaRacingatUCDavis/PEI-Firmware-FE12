@@ -16,7 +16,7 @@
 static const uint8_t ERROR_VOLTAGE_LIMIT = 4u;
 static const uint8_t ERROR_TEMPERATURE_LIMIT = 4u;
 static const uint8_t SPI_ERROR_LIMIT = 100u;
-static const uint32_t SPI_FAULT_REFRESH_THRESHOLD = 5000u;
+static const uint32_t SPI_FAULT_REFRESH_THRESHOLD = 1000u;
 static const uint32_t VOLTAGE_FAULT_REFRESH_THRESHOLD = 5000u;
 
 static uint8_t is_first_run = 1;

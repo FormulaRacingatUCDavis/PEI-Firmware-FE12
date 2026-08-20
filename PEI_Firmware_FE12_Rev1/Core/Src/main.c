@@ -183,21 +183,29 @@ static void set_side_fans(float duty_cycle) {
 	htim2.Instance->CCR2 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
 }
 
+// Called every 10 ms (100 Hz)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
-	// Send cell voltages once a second (delay 1 ms so we don't spam the bus)
+	static uint8_t count = 0;
+
+	can_send_BMS_High_Level_Data();
+
 	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 		can_send_BMS_Subpack_Data(subpack);
-		delay_us(&htim10, 1000);
+		delay_us(&htim10, 100); // delay so we don't spam the bus
 	}
 
-	// Send cell temps once a second (delay 1 ms so we don't spam the bus)
-	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-		for (uint8_t group = 0; group < 6; group++) {
-			can_send_BMS_Filtered_Temps(subpack, group);
-			delay_us(&htim10, 1000);
+	// Send cell temps every 100 ms (10 Hz)
+	if ((count % 10) == 0) {
+		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+			for (uint8_t group = 0; group < 6; group++) {
+				can_send_BMS_Filtered_Temps(subpack, group);
+				delay_us(&htim10, 33);
+			}
 		}
-		delay_us(&htim10, 1000);
 	}
+
+	count++;
+	count = count % 100; // prevents irregular timing due to uint8_t overflow
 }
 /* USER CODE END 0 */
 
@@ -853,7 +861,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 54000-1;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 999;
+  htim6.Init.Period = 19;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
