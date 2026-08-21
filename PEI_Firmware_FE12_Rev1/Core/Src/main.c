@@ -187,25 +187,27 @@ static void set_side_fans(float duty_cycle) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
 	static uint8_t count = 0;
 
-	can_send_BMS_High_Level_Data();
+	if (!charger_attached) {
+		can_send_BMS_High_Level_Data();
 
-	for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-		can_send_BMS_Subpack_Data(subpack);
-		delay_us(&htim10, 100); // delay so we don't spam the bus
-	}
-
-	// Send cell temps every 100 ms (10 Hz)
-	if ((count % 10) == 0) {
 		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-			for (uint8_t group = 0; group < 6; group++) {
-				can_send_BMS_Filtered_Temps(subpack, group);
-				delay_us(&htim10, 33);
+			can_send_BMS_Subpack_Data(subpack);
+			delay_us(&htim10, 100); // delay so we don't spam the bus
+		}
+
+		// Send cell temps every 100 ms (10 Hz)
+		if ((count % 10) == 0) {
+			for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+				for (uint8_t group = 0; group < 6; group++) {
+					can_send_BMS_Filtered_Temps(subpack, group);
+					delay_us(&htim10, 33);
+				}
 			}
 		}
-	}
 
-	count++;
-	count = count % 100; // prevents irregular timing due to uint8_t overflow
+		count++;
+		count = count % 100; // prevents irregular timing due to uint8_t overflow
+	}
 }
 /* USER CODE END 0 */
 
