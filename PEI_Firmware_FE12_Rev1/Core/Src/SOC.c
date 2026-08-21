@@ -132,7 +132,7 @@ void init_SOC_vars() {
 }
 
 void update_SOC_input() {
-  V = bat_pack.total_voltage / 120; // 120 cells series
+  V = bat_pack.pack_voltage / 120; // 120 cells series
   I = bat_pack.current / 3;         // 3 cells parallel
 }
 

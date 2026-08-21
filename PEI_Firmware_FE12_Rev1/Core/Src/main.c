@@ -64,7 +64,6 @@ IWDG_HandleTypeDef hiwdg;
 SPI_HandleTypeDef hspi5;
 
 TIM_HandleTypeDef htim2;
-TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim10;
 
@@ -119,12 +118,11 @@ static void MX_CAN2_Init(void);
 static void MX_TIM10_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM6_Init(void);
-static void MX_TIM5_Init(void);
 /* USER CODE BEGIN PFP */
 static void BMS_Init();
 static float raw_to_mvolts(uint16_t adc_raw);
 static float mvolts_to_amps(float mVolts, float mVolt_ref);
-static void update_current();
+static void update_current(uint16_t raw);
 static void set_back_fans(float duty_cycle);
 static void set_side_fans(float duty_cycle);
 
@@ -183,31 +181,31 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 }
 
 // Called every 10 ms (100 Hz)
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
-	static uint8_t count = 0;
-
-	if (!charger_attached) {
-		can_send_BMS_High_Level_Data();
-
-		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-			can_send_BMS_Subpack_Data(subpack);
-			delay_us(&htim10, 100); // delay so we don't spam the bus
-		}
-
-		// Send cell temps every 100 ms (10 Hz)
-		if ((count % 10) == 0) {
-			for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-				for (uint8_t group = 0; group < 6; group++) {
-					can_send_BMS_Filtered_Temps(subpack, group);
-					delay_us(&htim10, 33);
-				}
-			}
-		}
-
-		count++;
-		count = count % 100; // prevents irregular timing due to uint8_t overflow
-	}
-}
+//void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
+//	static uint8_t count = 0;
+//
+//	if (!charger_attached) {
+//		can_send_BMS_High_Level_Data();
+//
+//		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+//			can_send_BMS_Subpack_Data(subpack);
+//			delay_us(&htim10, 100); // delay so we don't spam the bus
+//		}
+//
+//		// Send cell temps every 100 ms (10 Hz)
+//		if ((count % 10) == 0) {
+//			for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+//				for (uint8_t group = 0; group < 6; group++) {
+//					can_send_BMS_Filtered_Temps(subpack, group);
+//					delay_us(&htim10, 33);
+//				}
+//			}
+//		}
+//
+//		count++;
+//		count = count % 100; // prevents irregular timing due to uint8_t overflow
+//	}
+//}
 /* USER CODE END 0 */
 
 /**
@@ -249,14 +247,12 @@ int main(void)
   MX_TIM10_Init();
   MX_TIM2_Init();
   MX_TIM6_Init();
-  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
-  HAL_ADC_Start_IT(&hadc3);
   HAL_TIM_Base_Start(&htim10);
-  HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_1);
+  HAL_TIM_Base_Start(&htim6);
+  HAL_ADC_Start_IT(&hadc3);
   LCD_Init(&htim10);
   BMS_Init();
 
@@ -274,7 +270,6 @@ int main(void)
 
 	  update_voltages(&hspi5, &htim10);
 	  update_temps(&hspi5, &htim10);
-	  update_current();
 
 	  process_voltages();
 	  process_temps();
@@ -410,7 +405,6 @@ int main(void)
 
 		  //can_send_BMS_Status();
 		  can_send_BMS_Diagnostics();
-		  can_send_BMS_High_Level_Data();
 	  }
 
 	  uart_send_GUI_Data(&huart3);
@@ -551,11 +545,11 @@ static void MX_ADC3_Init(void)
   hadc3.Instance = ADC3;
   hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc3.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc3.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc3.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc3.Init.ContinuousConvMode = DISABLE;
   hadc3.Init.DiscontinuousConvMode = DISABLE;
   hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
-  hadc3.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T5_TRGO;
+  hadc3.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T6_TRGO;
   hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc3.Init.NbrOfConversion = 1;
   hadc3.Init.DMAContinuousRequests = DISABLE;
@@ -575,6 +569,10 @@ static void MX_ADC3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC3_Init 2 */
+
+  // Workaround for ADC missing external timer triggers: enable DAC clock
+  uint32_t* RCC_APB1ENR = (uint32_t*)(0x40023800 + 0x40);
+  *RCC_APB1ENR |= 0x20000000; // set DAC_EN (bit 29)
 
   /* USER CODE END ADC3_Init 2 */
 
@@ -845,64 +843,6 @@ static void MX_TIM2_Init(void)
 }
 
 /**
-  * @brief TIM5 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM5_Init(void)
-{
-
-  /* USER CODE BEGIN TIM5_Init 0 */
-
-  /* USER CODE END TIM5_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  /* USER CODE BEGIN TIM5_Init 1 */
-
-  /* USER CODE END TIM5_Init 1 */
-  htim5.Instance = TIM5;
-  htim5.Init.Prescaler = 0;
-  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim5.Init.Period = 21600-1;
-  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim5) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM5_Init 2 */
-
-  /* USER CODE END TIM5_Init 2 */
-
-}
-
-/**
   * @brief TIM6 Initialization Function
   * @param None
   * @retval None
@@ -920,15 +860,15 @@ static void MX_TIM6_Init(void)
 
   /* USER CODE END TIM6_Init 1 */
   htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 54000-1;
+  htim6.Init.Prescaler = 0;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 19;
-  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim6.Init.Period = 27000-1;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
   {
