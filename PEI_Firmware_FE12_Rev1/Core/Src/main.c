@@ -64,6 +64,7 @@ IWDG_HandleTypeDef hiwdg;
 SPI_HandleTypeDef hspi5;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim5;
 TIM_HandleTypeDef htim6;
 TIM_HandleTypeDef htim10;
 
@@ -103,8 +104,6 @@ volatile uint32_t ticks_since_vcu_message = 0;
 volatile uint32_t ticks_since_mc_message = 0;
 volatile uint32_t ticks_since_charger_message = 0;
 
-static uint8_t is_first_measurement = 1;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -120,6 +119,7 @@ static void MX_CAN2_Init(void);
 static void MX_TIM10_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM6_Init(void);
+static void MX_TIM5_Init(void);
 /* USER CODE BEGIN PFP */
 static void BMS_Init();
 static float raw_to_mvolts(uint16_t adc_raw);
@@ -151,24 +151,17 @@ static float mvolts_to_amps(float mVolts, float mVolt_ref) {
 	return ((mVolts - mVolt_ref) * 7.4 / 4.7) / 6.667;
 }
 
-static void update_current() {
-	HAL_ADC_Start(&hadc3); // Start conversion
-
-	// Wait for conversion to complete
-	HAL_ADC_PollForConversion(&hadc3, HAL_MAX_DELAY);
-
-	// Move raw measurements into bat_pack struct
-	uint16_t raw = HAL_ADC_GetValue(&hadc3);
-	bat_pack.current_raw = raw;
-
-	// Calculate current in Amps
+static void update_current(uint16_t raw) {
+	static uint8_t is_first_measurement = 1;
 	static float mVolt_ref;
+
+	bat_pack.current_raw = raw;
+	// Calculate current in Amps
 	if (is_first_measurement) {
 		bat_pack.current_ref_raw = raw;
 		mVolt_ref = raw_to_mvolts(raw);
 		is_first_measurement = 0;
 	}
-
 	float mVolts = raw_to_mvolts(raw);
 
 	// Move calculated current into bat_pack struct
@@ -181,6 +174,12 @@ static void set_back_fans(float duty_cycle) {
 
 static void set_side_fans(float duty_cycle) {
 	htim2.Instance->CCR2 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+	uint16_t meas = HAL_ADC_GetValue(hadc);
+	update_current(meas);
+	can_send_PEI_Current();
 }
 
 // Called every 10 ms (100 Hz)
@@ -250,11 +249,14 @@ int main(void)
   MX_TIM10_Init();
   MX_TIM2_Init();
   MX_TIM6_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  HAL_ADC_Start_IT(&hadc3);
   HAL_TIM_Base_Start(&htim10);
   HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim5, TIM_CHANNEL_1);
   LCD_Init(&htim10);
   BMS_Init();
 
@@ -405,7 +407,6 @@ int main(void)
 	  }
 	  else {
 		  can_send_PEI_Status(shutdown_flags);
-		  can_send_PEI_Current();
 
 		  //can_send_BMS_Status();
 		  can_send_BMS_Diagnostics();
@@ -496,7 +497,7 @@ static void MX_ADC2_Init(void)
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc2.Instance = ADC2;
-  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc2.Init.Resolution = ADC_RESOLUTION_12B;
   hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc2.Init.ContinuousConvMode = DISABLE;
@@ -548,13 +549,13 @@ static void MX_ADC3_Init(void)
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc3.Instance = ADC3;
-  hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
+  hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc3.Init.Resolution = ADC_RESOLUTION_12B;
   hadc3.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc3.Init.ContinuousConvMode = DISABLE;
   hadc3.Init.DiscontinuousConvMode = DISABLE;
-  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+  hadc3.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T5_TRGO;
   hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc3.Init.NbrOfConversion = 1;
   hadc3.Init.DMAContinuousRequests = DISABLE;
@@ -568,7 +569,7 @@ static void MX_ADC3_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -840,6 +841,64 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 0;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 21600-1;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim5, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim5) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim5, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+
+  /* USER CODE END TIM5_Init 2 */
 
 }
 
