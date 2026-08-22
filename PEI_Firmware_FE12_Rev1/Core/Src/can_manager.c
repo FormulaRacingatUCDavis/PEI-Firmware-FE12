@@ -160,8 +160,8 @@ void can_send_BMS_High_Level_Data() {
 	tx_header.DLC = 6;
 
 	uint16_t HI_temp_c = bat_pack.HI_temp_c * 1000; // 3 decimals of precision
-	uint16_t pack_voltage = bat_pack.pack_voltage * 100; // 2 decimals of precision
-	uint16_t pack_balance = bat_pack.pack_balance * 100000; // 5 decimals of precision (2 if interpreted in mV)
+	uint16_t pack_voltage = bat_pack.filt_pack_voltage * 100; // 2 decimals of precision
+	uint16_t pack_balance = bat_pack.filt_pack_balance * 100000; // 5 decimals of precision (2 if interpreted in mV)
 
 	uint8_t tx_data[8];
 	tx_data[0] = HI8(HI_temp_c);
@@ -184,8 +184,8 @@ void can_send_BMS_Subpack_Data(uint8_t subpack_num) {
 	tx_header.StdId = BMS_SUBPACK_DATA_MSG_ID;
 	tx_header.DLC = 5;
 
-	uint16_t subpack_voltage = bat_pack.subpacks[subpack_num].subpack_voltage * 100; // 2 decimals of precision
-	uint16_t subpack_balance = bat_pack.subpacks[subpack_num].subpack_balance * 100000; // 5 decimals of precision
+	uint16_t subpack_voltage = bat_pack.subpacks[subpack_num].filt_subpack_voltage * 100; // 2 decimals of precision
+	uint16_t subpack_balance = bat_pack.subpacks[subpack_num].filt_subpack_balance * 100000; // 5 decimals of precision
 
 	uint8_t tx_data[8];
 	tx_data[0] = subpack_num;
@@ -197,7 +197,7 @@ void can_send_BMS_Subpack_Data(uint8_t subpack_num) {
 	HAL_CAN_AddTxMessage(&hcan2, &tx_header, tx_data, &BMS_SUBPACK_DATA_TX_MAILBOX);
 }
 
-void can_send_BMS_Filtered_Temps(uint8_t subpack_num, uint8_t group) {
+void can_send_BMS_Temps(uint8_t subpack_num, uint8_t group) {
 	const uint32_t BMS_TEMPS_MSG_ID = 0x384;
 	static uint32_t BMS_TEMPS_TX_MAILBOX;
 

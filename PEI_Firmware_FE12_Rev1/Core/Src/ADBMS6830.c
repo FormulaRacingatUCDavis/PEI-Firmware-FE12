@@ -19,7 +19,7 @@ static const uint8_t CFGA1 = 0x00;
 static const uint8_t CFGA2 = 0x80; // Soak time enabled for Aux GPIO
 static const uint8_t CFGA3 = 0xFF; // Pull-down resistor disabled for Aux GPIO 1-8
 static const uint8_t CFGA4 = 0x03; // Pull-down resistor disabled for Aux GPIO 9-10
-static const uint8_t CFGA5 = 0x03; // Set cell voltage ADC IIR filter corner frequency to 21 Hz
+static const uint8_t CFGA5 = 0x01; // Set cell voltage ADC IIR filter corner frequency to 110 Hz
 
 // Default values for CFGB registers
 static const uint8_t CFGB0 = 0x00;

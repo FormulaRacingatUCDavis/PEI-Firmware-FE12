@@ -79,7 +79,7 @@ uint8_t precharge_ready() {
 }
 
 uint8_t precharge_complete() {
-    uint16_t threshold = (uint16_t)((bat_pack.pack_voltage * 10) * 0.9);
+    uint16_t threshold = (uint16_t)((bat_pack.filt_pack_voltage * 10) * 0.9);
     return mc_voltage > threshold;
 }
 
