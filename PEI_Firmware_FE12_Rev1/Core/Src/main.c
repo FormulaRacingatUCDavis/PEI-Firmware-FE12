@@ -191,13 +191,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
 
 		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 			can_send_BMS_Subpack_Data(subpack);
-			delay_us(&htim10, 100); // delay so we don't spam the bus
+			delay_us(&htim10, 250); // delay so we don't spam the bus
 		}
 
 		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
 			for (uint8_t group = 0; group < 6; group++) {
 				can_send_BMS_Temps(subpack, group);
-				delay_us(&htim10, 33);
+				delay_us(&htim10, 250);
 			}
 		}
 	}
