@@ -32,6 +32,7 @@
 #include "relays.h"
 #include "LCD.h"
 #include "display.h"
+#include "delays.h"
 #include "data.h"
 
 /* USER CODE END Includes */
@@ -64,6 +65,8 @@ IWDG_HandleTypeDef hiwdg;
 SPI_HandleTypeDef hspi5;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim6;
+TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart3;
@@ -102,14 +105,14 @@ volatile uint32_t ticks_since_vcu_message = 0;
 volatile uint32_t ticks_since_mc_message = 0;
 volatile uint32_t ticks_since_charger_message = 0;
 
-// Buffer to store raw ADC measurements
-static volatile uint32_t ADC_RES_BUFFER[2];
-static uint8_t is_first_measurement = 1;
+// Buffer to store raw current measurements from ADC
+static volatile uint16_t current_meas_buf[16] __ALIGNED(32);
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MPU_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC2_Init(void);
@@ -121,15 +124,17 @@ static void MX_IWDG_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_TIM10_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM6_Init(void);
+static void MX_TIM7_Init(void);
 /* USER CODE BEGIN PFP */
 static void BMS_Init();
 static float raw_to_mvolts(uint16_t adc_raw);
 static float mvolts_to_amps(float mVolts, float mVolt_ref);
-static void update_current();
 static void set_back_fans(float duty_cycle);
 static void set_side_fans(float duty_cycle);
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc);
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -151,16 +156,6 @@ static float mvolts_to_amps(float mVolts, float mVolt_ref) {
 	return ((mVolts - mVolt_ref) * 7.4 / 4.7) / 6.667;
 }
 
-static void update_current() {
-	/*
-	 * Start ADC conversion to measure current.
-	 *
-	 * Conversion from raw ADC measurement to current value in Amps
-	 * is handled in the resulting DMA interrupt.
-	 */
-	HAL_ADC_Start_DMA(&hadc3, ADC_RES_BUFFER, 2);
-}
-
 static void set_back_fans(float duty_cycle) {
 	htim2.Instance->CCR1 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
 }
@@ -170,24 +165,39 @@ static void set_side_fans(float duty_cycle) {
 }
 
 // Called when ADC conversion and DMA transfer is complete
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc) {
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+	SCB_InvalidateDCache_by_Addr((uint32_t*)current_meas_buf, 4);
+
 	// Move raw measurements into bat_pack struct
-	bat_pack.current_raw = ADC_RES_BUFFER[0];
-	//bat_pack.current_ref_raw = ADC_RES_BUFFER[1];
+	bat_pack.current_raw = current_meas_buf[0];
+	bat_pack.current_ref_raw = current_meas_buf[1];
 
 	// Calculate current in Amps
-	//float mVolt_ref = raw_to_mvolts(ADC_RES_BUFFER[1]);
-	static float mVolt_ref;
-	if (is_first_measurement) {
-		bat_pack.current_raw = ADC_RES_BUFFER[0];
-		mVolt_ref = raw_to_mvolts(ADC_RES_BUFFER[0]);
-		is_first_measurement = 0;
-	}
-
-	float mVolts = raw_to_mvolts(ADC_RES_BUFFER[0]);
+	float mVolts = raw_to_mvolts(current_meas_buf[0]);
+	float mVolt_ref = raw_to_mvolts(current_meas_buf[1]);
 
 	// Move calculated current into bat_pack struct
 	bat_pack.current = mvolts_to_amps(mVolts, mVolt_ref);
+	if (!charger_attached) can_send_PEI_Current();
+}
+
+// Called every 100 ms (10 Hz)
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
+	if (!charger_attached) {
+		can_send_BMS_High_Level_Data();
+
+		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+			can_send_BMS_Subpack_Data(subpack);
+			delay_us(&htim10, 250); // delay so we don't spam the bus
+		}
+
+		for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
+			for (uint8_t group = 0; group < 6; group++) {
+				can_send_BMS_Temps(subpack, group);
+				delay_us(&htim10, 250);
+			}
+		}
+	}
 }
 /* USER CODE END 0 */
 
@@ -201,6 +211,17 @@ int main(void)
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
+
+  /* MPU Configuration--------------------------------------------------------*/
+  MPU_Config();
+
+  /* Enable the CPU Cache */
+
+  /* Enable I-Cache---------------------------------------------------------*/
+  SCB_EnableICache();
+
+  /* Enable D-Cache---------------------------------------------------------*/
+  SCB_EnableDCache();
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -230,10 +251,19 @@ int main(void)
   MX_CAN2_Init();
   MX_TIM10_Init();
   MX_TIM2_Init();
+  MX_TIM6_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_Base_Start(&htim10);
+
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+
+  HAL_TIM_Base_Start_IT(&htim7);
+
+  HAL_TIM_Base_Start(&htim6);
+  HAL_ADC_Start_DMA(&hadc3, (uint32_t*)current_meas_buf, 2);
+
   LCD_Init(&htim10);
   BMS_Init();
 
@@ -241,7 +271,6 @@ int main(void)
 
   BMS_MODE_t bms_status = BMS_NORMAL;
   uint32_t cell_disconnect_check_tickstart = HAL_GetTick();
-  uint32_t BMS_low_level_data_send_tickstart = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -252,7 +281,6 @@ int main(void)
 
 	  update_voltages(&hspi5, &htim10);
 	  update_temps(&hspi5, &htim10);
-	  update_current();
 
 	  process_voltages();
 	  process_temps();
@@ -385,28 +413,9 @@ int main(void)
 	  }
 	  else {
 		  can_send_PEI_Status(shutdown_flags);
-		  can_send_PEI_Current();
 
 		  can_send_BMS_Status();
 		  can_send_BMS_Diagnostics();
-		  can_send_BMS_High_Level_Data();
-
-		  // Send all raw BMS voltages and temps once a minute
-		  if ((HAL_GetTick() - BMS_low_level_data_send_tickstart) > 60000) {
-			  for (uint8_t subpack = 0; subpack < N_OF_SUBPACK; subpack++) {
-
-				  // Send voltages
-				  for (uint8_t group = 0; group < 8; group++) {
-					  can_send_BMS_Voltages(subpack, group);
-				  }
-
-				  // Send temps
-				  for (uint8_t group = 0; group < 6; group++) {
-					  can_send_BMS_Temps(subpack, group);
-				  }
-			  }
-
-			  BMS_low_level_data_send_tickstart = HAL_GetTick();
 		  }
 	  }
 
@@ -416,9 +425,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
 }
+  /* USER CODE END 3 */
 
 /**
   * @brief System Clock Configuration
@@ -494,7 +502,7 @@ static void MX_ADC2_Init(void)
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc2.Instance = ADC2;
-  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc2.Init.Resolution = ADC_RESOLUTION_12B;
   hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
   hadc2.Init.ContinuousConvMode = DISABLE;
@@ -546,13 +554,13 @@ static void MX_ADC3_Init(void)
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
   hadc3.Instance = ADC3;
-  hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV8;
+  hadc3.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc3.Init.Resolution = ADC_RESOLUTION_12B;
   hadc3.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc3.Init.ContinuousConvMode = DISABLE;
   hadc3.Init.DiscontinuousConvMode = DISABLE;
-  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
+  hadc3.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T6_TRGO;
   hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc3.Init.NbrOfConversion = 2;
   hadc3.Init.DMAContinuousRequests = DISABLE;
@@ -566,7 +574,7 @@ static void MX_ADC3_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_9;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_15CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -576,11 +584,17 @@ static void MX_ADC3_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_8;
   sConfig.Rank = ADC_REGULAR_RANK_2;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN ADC3_Init 2 */
+
+  // Workaround for ADC missing external timer triggers: enable DAC clock
+  // Source: https://community.st.com/stm32-mcus-products-25/adc-trigger-with-timer-not-working-51318
+  uint32_t* RCC_APB1ENR = (uint32_t*)(0x40023800 + 0x40);
+  *RCC_APB1ENR |= 0x20000000; // set DAC_EN (bit 29)
 
   /* USER CODE END ADC3_Init 2 */
 
@@ -851,6 +865,82 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM6 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM6_Init(void)
+{
+
+  /* USER CODE BEGIN TIM6_Init 0 */
+
+  /* USER CODE END TIM6_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM6_Init 1 */
+
+  /* USER CODE END TIM6_Init 1 */
+  htim6.Instance = TIM6;
+  htim6.Init.Prescaler = 0;
+  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim6.Init.Period = 27000-1;
+  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM6_Init 2 */
+
+  /* USER CODE END TIM6_Init 2 */
+
+}
+
+/**
+  * @brief TIM7 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM7_Init(void)
+{
+
+  /* USER CODE BEGIN TIM7_Init 0 */
+
+  /* USER CODE END TIM7_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM7_Init 1 */
+
+  /* USER CODE END TIM7_Init 1 */
+  htim7.Instance = TIM7;
+  htim7.Init.Prescaler = 54000-1;
+  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim7.Init.Period = 199;
+  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM7_Init 2 */
+
+  /* USER CODE END TIM7_Init 2 */
+
+}
+
+/**
   * @brief TIM10 Initialization Function
   * @param None
   * @retval None
@@ -1043,6 +1133,56 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE END 4 */
 
+ /* MPU Configuration */
+
+void MPU_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+  /* Disables the MPU */
+  HAL_MPU_Disable();
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+  MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+  MPU_InitStruct.BaseAddress = 0x90000000;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_512MB;
+  MPU_InitStruct.SubRegionDisable = 0x0;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_16MB;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /** Initializes and configures the Region and the memory to be protected
+  */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+  MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+  /* Enables the MPU */
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+}
+
 /**
   * @brief  This function is executed in case of error occurrence.
   * @retval None
@@ -1057,8 +1197,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.

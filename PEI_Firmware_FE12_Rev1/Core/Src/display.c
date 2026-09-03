@@ -113,7 +113,7 @@ void update_display(TIM_HandleTypeDef* const htim_ptr) {
 		LCD_PrintString(htim_ptr, str);
 
 		LCD_Position(htim_ptr, 1, 5);
-		sprintf(str, "%uC", bat_pack.HI_temp_c);
+		sprintf(str, "%uC", (uint8_t)bat_pack.HI_temp_c);
 		LCD_PrintString(htim_ptr, str);
 
 		LCD_Position(htim_ptr, 1, 10);

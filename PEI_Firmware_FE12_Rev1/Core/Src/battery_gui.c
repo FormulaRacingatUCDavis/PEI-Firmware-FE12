@@ -60,7 +60,7 @@ void uart_send_GUI_Data(UART_HandleTypeDef* const huart) {
 	send_byte(huart, ESCAPE_CHAR);
 	send_byte(huart, PACK_FRAME_START);
 
-	uint16_t v = (uint16_t)bat_pack.total_voltage_raw;
+	uint16_t v = (uint16_t)bat_pack.pack_voltage_raw;
 	send_byte_with_escape(huart, HI8(v));
 	send_byte_with_escape(huart, LO8(v));
 
