@@ -20,9 +20,7 @@ static const uint32_t SPI_FAULT_REFRESH_THRESHOLD = 1000u;
 static const uint32_t VOLTAGE_FAULT_REFRESH_THRESHOLD = 5000u;
 
 static uint8_t is_first_run_temp = 1;
-static uint8_t is_first_run_volt = 1;
 static float temp_smoothing_factor = 0;
-static float volt_smoothing_factor = 0;
 
 uint8_t max_fault_addr;
 uint8_t max_faults;
@@ -77,20 +75,12 @@ void cell_interface_init(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* c
 	pack_init();
 }
 
-void set_voltage(uint8_t subpack_num, uint8_t cell_num, int16_t voltage_raw) {
+void set_voltage(uint8_t subpack_num, uint8_t cell_num, int16_t voltage_raw, int16_t filt_voltage_raw) {
 	if (voltage_raw != 0) {
 		bat_pack.subpacks[subpack_num].cells[cell_num].voltage_raw = voltage_raw;
 
-		float voltage = (voltage_raw * 0.00015) + 1.5;
-		bat_pack.subpacks[subpack_num].cells[cell_num].voltage = voltage;
-
-		if (is_first_run_volt) bat_pack.subpacks[subpack_num].cells[cell_num].filt_voltage = voltage;
-		else {
-			float prev_filt_voltage = bat_pack.subpacks[subpack_num].cells[cell_num].filt_voltage;
-			float filt_voltage = (volt_smoothing_factor * voltage) + ((1 - volt_smoothing_factor) * prev_filt_voltage);
-
-			bat_pack.subpacks[subpack_num].cells[cell_num].filt_voltage = filt_voltage;
-		}
+		bat_pack.subpacks[subpack_num].cells[cell_num].voltage = (voltage_raw * 0.00015) + 1.5;
+		bat_pack.subpacks[subpack_num].cells[cell_num].filt_voltage = (filt_voltage_raw * 0.00015) + 1.5;
 	}
 }
 
@@ -209,22 +199,16 @@ static void aggregate_spi_errors(uint8_t spi_error_matrix[4][N_OF_ADBMS],
 }
 
 void update_voltages(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
-	static uint32_t prev_volt_meas_tick = 0;
 
 	int16_t cell_voltages[N_OF_ADBMS][CELLS_PER_ADBMS];
+	int16_t filt_cell_voltages[N_OF_ADBMS][CELLS_PER_ADBMS];
 	uint8_t spi_errors[N_OF_ADBMS];
 
-	ADBMS6830_rdfc_all(hspi_ptr, htim_ptr, cell_voltages, spi_errors);
+	ADBMS6830_rdcv_all(hspi_ptr, htim_ptr, cell_voltages, spi_errors);
 	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
 
-	if (is_first_run_volt) prev_volt_meas_tick = HAL_GetTick();
-	else {
-		float volt_sampling_period = (HAL_GetTick() - prev_volt_meas_tick) / 1000.0;
-		prev_volt_meas_tick = HAL_GetTick();
-
-		// dynamically calculate smoothing factor for digital LPF with cutoff at 2 Hz
-		volt_smoothing_factor = 1 - exp(-1 * volt_sampling_period / 0.0796);
-	}
+	ADBMS6830_rdfc_all(hspi_ptr, htim_ptr, filt_cell_voltages, spi_errors);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
 
 	for (uint8_t ic = 0; ic < N_OF_ADBMS; ic++) {
 		// Move voltages into bat_pack if no SPI error
@@ -232,13 +216,11 @@ void update_voltages(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const
 			for (uint8_t cell = 0; cell < CELLS_PER_ADBMS; cell++) {
 				set_voltage(ic / IC_PER_SUBPACK,
 							((ic % IC_PER_SUBPACK) * CELLS_PER_ADBMS) + cell,
-							cell_voltages[ic][cell]
+							cell_voltages[ic][cell], filt_cell_voltages[ic][cell]
 							);
 			}
 		}
 	}
-
-	if (is_first_run_volt) is_first_run_volt = 0;
 }
 
 void update_temps(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef* const htim_ptr) {
