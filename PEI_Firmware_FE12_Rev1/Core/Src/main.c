@@ -157,6 +157,16 @@ static float mvolts_to_amps(float mVolts, float mVolt_ref) {
 	return ((mVolts - mVolt_ref) * 7.4 / 4.7) / 6.667;
 }
 
+static void enable_fans() {
+	HAL_GPIO_WritePin(SCF1_EN_GPIO_Port, SCF1_EN_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(SCF2_EN_GPIO_Port, SCF2_EN_Pin, GPIO_PIN_SET);
+}
+
+static void disable_fans() {
+	HAL_GPIO_WritePin(SCF1_EN_GPIO_Port, SCF1_EN_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(SCF2_EN_GPIO_Port, SCF2_EN_Pin, GPIO_PIN_RESET);
+}
+
 static void set_back_fans(float duty_cycle) {
 	htim2.Instance->CCR1 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
 }
@@ -314,6 +324,8 @@ int main(void)
 	  }
 
 	  if (bat_pack.HI_temp_c > 40) {
+		  enable_fans();
+
 		  // Set cooling fans to 40% duty cycle
 		  set_back_fans(0.4);
 		  set_side_fans(0.4);
@@ -322,6 +334,7 @@ int main(void)
 		  // Stop cooling fans
 		  set_back_fans(0);
 		  set_side_fans(0);
+		  disable_fans();
 	  }
 
 	  // Update SOC estimate
@@ -429,6 +442,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 }
   /* USER CODE END 3 */
+}
 
 /**
   * @brief System Clock Configuration
@@ -997,8 +1011,7 @@ static void MX_USART3_UART_Init(void)
   huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart3.Init.OverSampling = UART_OVERSAMPLING_16;
   huart3.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_SWAP_INIT;
-  huart3.AdvancedInit.Swap = UART_ADVFEATURE_SWAP_ENABLE;
+  huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
   if (HAL_UART_Init(&huart3) != HAL_OK)
   {
     Error_Handler();
@@ -1047,10 +1060,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, LCD_RS_Pin|SPI5_CS2_Pin|SPI5_CS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, LCD_RS_Pin|SCF1_EN_Pin|SPI5_CS2_Pin|SPI5_CS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(Heartbeat_GPIO_Port, Heartbeat_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, Heartbeat_Pin|SCF2_EN_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, LCD_DB4_Pin|LCD_DB5_Pin|LCD_DB6_Pin|LCD_DB7_Pin, GPIO_PIN_RESET);
@@ -1071,19 +1084,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LCD_RS_Pin SPI5_CS2_Pin SPI5_CS_Pin */
-  GPIO_InitStruct.Pin = LCD_RS_Pin|SPI5_CS2_Pin|SPI5_CS_Pin;
+  /*Configure GPIO pins : LCD_RS_Pin SCF1_EN_Pin SPI5_CS2_Pin SPI5_CS_Pin */
+  GPIO_InitStruct.Pin = LCD_RS_Pin|SCF1_EN_Pin|SPI5_CS2_Pin|SPI5_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : Heartbeat_Pin */
-  GPIO_InitStruct.Pin = Heartbeat_Pin;
+  /*Configure GPIO pins : Heartbeat_Pin SCF2_EN_Pin */
+  GPIO_InitStruct.Pin = Heartbeat_Pin|SCF2_EN_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(Heartbeat_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LCD_DB4_Pin LCD_DB5_Pin LCD_DB6_Pin LCD_DB7_Pin */
   GPIO_InitStruct.Pin = LCD_DB4_Pin|LCD_DB5_Pin|LCD_DB6_Pin|LCD_DB7_Pin;
