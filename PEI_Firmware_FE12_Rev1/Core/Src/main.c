@@ -106,7 +106,8 @@ volatile uint32_t ticks_since_mc_message = 0;
 volatile uint32_t ticks_since_charger_message = 0;
 
 // Buffer to store raw current measurements from ADC
-static volatile uint16_t current_meas_buf[16] __ALIGNED(32);
+// Buffer length in bytes needs to be divisible by 32
+static volatile uint16_t current_meas_buf[16] __ALIGNED(32); // cache lines are 32 bytes long
 
 /* USER CODE END PV */
 
@@ -164,6 +165,7 @@ static void set_side_fans(float duty_cycle) {
 	htim2.Instance->CCR2 = (uint32_t)((1 - duty_cycle) * htim2.Instance->ARR);
 }
 
+// Timer triggers ADC conversion every 250 us (4 kHz)
 // Called when ADC conversion and DMA transfer is complete
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 	SCB_InvalidateDCache_by_Addr((uint32_t*)current_meas_buf, 4);
