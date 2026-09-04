@@ -423,6 +423,10 @@ int main(void)
 	  update_display(&htim10);
 	  HAL_GPIO_TogglePin(Heartbeat_GPIO_Port, Heartbeat_Pin);
 
+	  uart_send_GUI_Data(&huart3);
+
+	  HAL_IWDG_Refresh(&hiwdg);
+
 	  if (charger_attached) {
 		  can_send_Charger();
 	  }
@@ -433,14 +437,9 @@ int main(void)
 		  can_send_BMS_Diagnostics();
 		  }
 	  }
-
-	  uart_send_GUI_Data(&huart3);
-
-	  HAL_IWDG_Refresh(&hiwdg);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-}
   /* USER CODE END 3 */
 }
 
@@ -579,7 +578,7 @@ static void MX_ADC3_Init(void)
   hadc3.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T6_TRGO;
   hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc3.Init.NbrOfConversion = 2;
-  hadc3.Init.DMAContinuousRequests = DISABLE;
+  hadc3.Init.DMAContinuousRequests = ENABLE;
   hadc3.Init.EOCSelection = ADC_EOC_SEQ_CONV;
   if (HAL_ADC_Init(&hadc3) != HAL_OK)
   {
