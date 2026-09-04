@@ -435,8 +435,8 @@ int main(void)
 
 		  can_send_BMS_Status();
 		  can_send_BMS_Diagnostics();
-		  }
 	  }
+  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
