@@ -154,7 +154,7 @@ static float raw_to_mvolts(uint16_t adc_raw) {
 }
 
 static float mvolts_to_amps(float mVolts, float mVolt_ref) {
-	return ((mVolts - mVolt_ref) * 7.4 / 4.7) / 6.667;
+	return ((mVolts * 7.4 / 4.7) - mVolt_ref) / 6.667;
 }
 
 static void enable_fans() {
