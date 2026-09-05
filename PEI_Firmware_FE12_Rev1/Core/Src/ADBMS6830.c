@@ -192,13 +192,13 @@ static void single_spi_write(SPI_HandleTypeDef* const hspi_ptr, // Pointer to th
 		}
 	}
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
 	delay_500_ns(htim_ptr);
 
 	HAL_SPI_Transmit(hspi_ptr, tx_data, tx_len, 100);
 	delay_500_ns(htim_ptr);
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
 	delay_us(htim_ptr, 2);
 }
 
@@ -330,14 +330,14 @@ static uint8_t single_spi_write_read(SPI_HandleTypeDef* const hspi_ptr, // Point
 	uint8_t rx_len = N_OF_ADBMS * 8; // 6 register bytes + 2 PEC bytes = 8 bytes per IC
 	uint8_t rx_data_flattened[rx_len]; // array to store data from all ICs
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_RESET);
 	delay_500_ns(htim_ptr);
 
 	HAL_SPI_Transmit(hspi_ptr, tx_data, 4, 100);
 	HAL_SPI_Receive(hspi_ptr, rx_data_flattened, rx_len, 100);
 	delay_500_ns(htim_ptr);
 
-	HAL_GPIO_WritePin(SPI5_CS_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(SPI5_CS2_GPIO_Port, SPI5_CS_Pin, GPIO_PIN_SET);
 	delay_us(htim_ptr, 2);
 
 	// Package data (excluding PEC) into 2D array and process PECs
