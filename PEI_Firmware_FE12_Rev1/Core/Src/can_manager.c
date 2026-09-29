@@ -277,7 +277,7 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 	uint32_t id = rx1_header.StdId;
 	if (id == MC_VOLTAGE_MSG_ID) {
 		mc_voltage = CAN_RX1_BUFFER[1] << 8;
-		mc_voltage += CAN_RX1_BUFFER[0];
+		mc_voltage |= CAN_RX1_BUFFER[0];
 	}
 	else if (id == MC_STATE_MSG_ID) {
 		mc_vsm_state = CAN_RX1_BUFFER[0];
@@ -285,14 +285,14 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef* hcan_ptr) {
 	}
 	else if (id == MC_FAULT_MSG_ID) {
 		mc_post_faults = CAN_RX1_BUFFER[3] << 24;
-		mc_post_faults += CAN_RX1_BUFFER[2] << 16;
-		mc_post_faults += CAN_RX1_BUFFER[1] << 8;
-		mc_post_faults += CAN_RX1_BUFFER[0];
+		mc_post_faults |= CAN_RX1_BUFFER[2] << 16;
+		mc_post_faults |= CAN_RX1_BUFFER[1] << 8;
+		mc_post_faults |= CAN_RX1_BUFFER[0];
 
 		mc_run_faults = CAN_RX1_BUFFER[7] << 24;
-		mc_run_faults += CAN_RX1_BUFFER[6] << 16;
-		mc_run_faults += CAN_RX1_BUFFER[5] << 8;
-		mc_run_faults += CAN_RX1_BUFFER[4];
+		mc_run_faults |= CAN_RX1_BUFFER[6] << 16;
+		mc_run_faults |= CAN_RX1_BUFFER[5] << 8;
+		mc_run_faults |= CAN_RX1_BUFFER[4];
 	}
 }
 
