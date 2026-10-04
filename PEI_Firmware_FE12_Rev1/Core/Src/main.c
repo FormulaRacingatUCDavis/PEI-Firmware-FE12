@@ -772,6 +772,9 @@ static void MX_IWDG_Init(void)
   }
   /* USER CODE BEGIN IWDG_Init 2 */
 
+  uint32_t* DBGMCU_APB1_FZ = (uint32_t*)(0xE0042008);
+  *DBGMCU_APB1_FZ |= 0x00001000; // set DBG_IWDG_STOP to disable IWDG in debug mode
+
   /* USER CODE END IWDG_Init 2 */
 
 }
