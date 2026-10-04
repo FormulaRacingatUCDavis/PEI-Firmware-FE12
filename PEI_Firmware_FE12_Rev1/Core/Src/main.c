@@ -70,6 +70,7 @@ TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart3;
+DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
 // PEI parameters
@@ -99,6 +100,8 @@ extern volatile uint8_t charger_attached;
 extern uint8_t charge_control;
 extern uint8_t charge_profile_received;
 extern uint16_t charger_max_current;
+
+extern volatile UART_TxCplt; // flag for whether UART transmission finished
 
 // Tick counters
 volatile uint32_t ticks_since_vcu_message = 0;
@@ -134,8 +137,9 @@ static float mvolts_to_amps(float mVolts, float mVolt_ref);
 static void set_back_fans(float duty_cycle);
 static void set_side_fans(float duty_cycle);
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* const hadc);
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc);
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr);
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -194,7 +198,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
 }
 
 // Called every 100 ms (10 Hz)
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim) {
 	if (!charger_attached) {
 		can_send_BMS_High_Level_Data();
 
@@ -210,6 +214,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim_ptr) {
 			}
 		}
 	}
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart) {
+	UART_TxCplt = 1;
 }
 /* USER CODE END 0 */
 
@@ -423,6 +431,7 @@ int main(void)
 	  update_display(&htim10);
 	  HAL_GPIO_TogglePin(Heartbeat_GPIO_Port, Heartbeat_Pin);
 
+	  while(!UART_TxCplt); // shouldn't send another UART transmission until current one is finished
 	  uart_send_GUI_Data(&huart3);
 
 	  HAL_IWDG_Refresh(&hiwdg);
@@ -1032,8 +1041,12 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA2_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
   /* DMA2_Stream0_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
