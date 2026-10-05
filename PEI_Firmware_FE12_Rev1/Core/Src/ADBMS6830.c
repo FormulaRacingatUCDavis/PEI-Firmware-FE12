@@ -14,7 +14,7 @@
 static const uint8_t WAKE_UP_DELAY_US = 10 * N_OF_ADBMS; // number of microseconds to wait after sending wake up signal
 
 // Default values for CFGA registers
-static const uint8_t CFGA0 = 0x81; // REFON enabled, C-ADC vs S-ADC comparison voltage threshold set to its default (8.1 mV)
+static const uint8_t CFGA0 = 0x82; // REFON enabled, C-ADC vs S-ADC comparison voltage threshold set to 9 mV
 static const uint8_t CFGA1 = 0x00;
 static const uint8_t CFGA2 = 0x80; // Soak time enabled for Aux GPIO
 static const uint8_t CFGA3 = 0xFF; // Pull-down resistor disabled for Aux GPIO 1-8
