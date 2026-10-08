@@ -431,8 +431,13 @@ int main(void)
 	  update_display(&htim10);
 	  HAL_GPIO_TogglePin(Heartbeat_GPIO_Port, Heartbeat_Pin);
 
-	  while(!UART_TxCplt); // shouldn't send another UART transmission until current one is finished
-	  uart_send_GUI_Data(&huart3);
+	  // TODO: check if USB is plugged in when we get the hardware functionality
+	  // Send battery GUI data
+	  // Need to wait for previous UART transmission to complete if not already, but only allow 30 ms delay
+	  uint32_t timeout_tickstart = HAL_GetTick();
+	  uint8_t timed_out = 0;
+	  while(!UART_TxCplt && !timed_out) timed_out = (HAL_GetTick() - timeout_tickstart) > 30;
+	  if (!timed_out) uart_send_GUI_Data(&huart3);
 
 	  HAL_IWDG_Refresh(&hiwdg);
 
