@@ -279,13 +279,11 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 	HAL_Delay(16);
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	ADBMS6830_rdstatc_mismatch(hspi_ptr, htim_ptr, mismatch_flags, spi_errors);
-	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
-	copy_array_into(spi_error_matrix[0], spi_errors, N_OF_ADBMS);
+	ADBMS6830_rdstatc_mismatch(hspi_ptr, htim_ptr, mismatch_flags, spi_error_matrix[0]);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_error_matrix[0]);
 
-	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, baseline_voltages, spi_errors);
-	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
-	copy_array_into(spi_error_matrix[1], spi_errors, N_OF_ADBMS);
+	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, baseline_voltages, spi_error_matrix[1]);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_error_matrix[1]);
 
 	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
@@ -295,9 +293,8 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, even_open_wire_voltages, spi_errors);
-	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
-	copy_array_into(spi_error_matrix[2], spi_errors, N_OF_ADBMS);
+	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, even_open_wire_voltages, spi_error_matrix[2]);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_error_matrix[2]);
 
 	if (ADBMS6830_wakeup_necessary()) {
 		ADBMS6830_wakeup(hspi_ptr, htim_ptr);
@@ -307,9 +304,8 @@ void cell_disconnect_check(SPI_HandleTypeDef* const hspi_ptr, TIM_HandleTypeDef*
 	ADBMS6830_adsv(hspi_ptr, htim_ptr);
 
 	ADBMS6830_wakeup(hspi_ptr, htim_ptr);
-	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, odd_open_wire_voltages, spi_errors);
-	update_spi_errors(hspi_ptr, htim_ptr, spi_errors);
-	copy_array_into(spi_error_matrix[3], spi_errors, N_OF_ADBMS);
+	ADBMS6830_rdsv_all(hspi_ptr, htim_ptr, odd_open_wire_voltages, spi_error_matrix[3]);
+	update_spi_errors(hspi_ptr, htim_ptr, spi_error_matrix[3]);
 
 	aggregate_spi_errors(spi_error_matrix, spi_errors);
 

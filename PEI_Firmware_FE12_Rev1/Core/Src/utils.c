@@ -23,10 +23,3 @@ uint8_t HI4(uint8_t byte) {
 uint8_t LO4(uint8_t byte) {
 	return byte & 0x0F; // return lower 4 bits of a byte
 }
-
-// Copy an array into another array
-void copy_array_into(uint8_t buf[], uint8_t data[], uint8_t len) {
-	for (uint8_t i = 0; i < len; i++) {
-		buf[i] = data[i];
-	}
-}

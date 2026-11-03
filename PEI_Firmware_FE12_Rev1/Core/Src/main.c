@@ -101,7 +101,7 @@ extern uint8_t charge_control;
 extern uint8_t charge_profile_received;
 extern uint16_t charger_max_current;
 
-extern volatile UART_TxCplt; // flag for whether UART transmission finished
+extern volatile uint8_t UART_TxCplt; // flag for whether UART transmission finished
 
 // Tick counters
 volatile uint32_t ticks_since_vcu_message = 0;
